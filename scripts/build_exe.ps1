@@ -62,6 +62,8 @@ h = hashlib.sha256()
 for t in targets:
     if t.is_dir():
         for p in sorted([x for x in t.rglob("*") if x.is_file()]):
+            if "__pycache__" in p.parts or p.suffix in {".pyc", ".pyo"}:
+                continue
             rel = p.relative_to(root).as_posix().encode("utf-8")
             h.update(rel)
             h.update(b"\0")
