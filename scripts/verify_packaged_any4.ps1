@@ -1,5 +1,5 @@
 param(
-    [string]$DistRoot = "dist/AgibotConverterShell",
+    [string]$DistRoot = "dist/DataConverterShell",
     [string]$RepoAny4File = "any4lerobot/agibot2lerobot/agibot_h5.py"
 )
 

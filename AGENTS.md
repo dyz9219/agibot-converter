@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## 项目结构与模块组织
-- 核心代码位于 `src/agibot_converter/`：
+- 核心代码位于 `src/data_converter/`：
   - UI 与入口：`main.py`
   - 转换编排：`backend.py`、`routing.py`、`precheck.py`
   - LeRobot 运行桥接：`any4_*`、`converters/lerobot_runner.py`
@@ -18,7 +18,7 @@
   - `.\scripts\build_exe.ps1 -Profile fast`
   - `.\scripts\build_exe.ps1 -Profile full`
 - 校验打包后的 any4 一致性：
-  - `.\scripts\verify_packaged_any4.ps1 -DistRoot dist/AgibotConverterShell-full`
+  - `.\scripts\verify_packaged_any4.ps1 -DistRoot dist/DataConverterShell-full`
 
 ## 代码风格与命名规范
 - Python 3.11+，4 空格缩进，UTF-8。

@@ -57,7 +57,7 @@ import hashlib
 from pathlib import Path
 
 root = Path(r"$($root.Replace('\', '/'))")
-targets = [root / "src" / "agibot_converter", root / "scripts" / "build_exe.ps1", root / "AgibotConverterShell.spec"]
+targets = [root / "src" / "data_converter", root / "scripts" / "build_exe.ps1", root / "DataConverterShell.spec"]
 h = hashlib.sha256()
 for t in targets:
     if t.is_dir():
@@ -97,8 +97,8 @@ $metaJson = $meta | ConvertTo-Json -Depth 5
 
 if ($resolvedProfile -eq "fast") {
     $distPath = "$root\dist"
-    $workPath = "$root\build\AgibotConverterShell-fast"
-    $name = "AgibotConverterShell-fast"
+    $workPath = "$root\build\DataConverterShell-fast"
+    $name = "DataConverterShell-fast"
     $collectArgs = @(
         "--collect-all", "flet",
         "--collect-all", "flet_desktop",
@@ -108,8 +108,8 @@ if ($resolvedProfile -eq "fast") {
     )
 } else {
     $distPath = "$root\dist"
-    $workPath = "$root\build\AgibotConverterShell-full"
-    $name = "AgibotConverterShell-full"
+    $workPath = "$root\build\DataConverterShell-full"
+    $name = "DataConverterShell-full"
     $collectArgs = @(
         "--collect-all", "flet",
         "--collect-all", "flet_desktop",
@@ -140,7 +140,7 @@ $baseArgs = @(
     "--add-data", "$any4;any4lerobot",
     "--add-data", "$assets;assets",
     "--add-data", "$metaPath;assets",
-    "src/agibot_converter/main.py"
+    "src/data_converter/main.py"
 )
 
 & $py @baseArgs @collectArgs

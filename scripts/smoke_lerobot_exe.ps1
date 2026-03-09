@@ -1,5 +1,5 @@
 param(
-    [string]$InputPath = "D:\workspace\work\bwy\agibot-converter\演示用抓取任务_2013529099792277505_20260210_131921",
+    [string]$InputPath = "",
     [string]$OutputRoot = "smoke-runs",
     [int]$Concurrency = 2,
     [string[]]$Versions = @("HDF5", "v2.0", "v2.1", "v3.0"),
@@ -11,6 +11,10 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+if (-not $InputPath) {
+    $InputPath = Join-Path $root "演示用抓取任务_2013529099792277505_20260210_131921"
+}
+
 $venv = Join-Path $root ".venv"
 $py = Join-Path $venv "Scripts\python.exe"
 $any4Local = Join-Path $root "any4lerobot"
@@ -18,7 +22,7 @@ $any4Parent = Join-Path (Split-Path $root -Parent) "any4lerobot"
 $any4 = if (Test-Path (Join-Path $any4Local "agibot2lerobot\agibot_h5.py")) { $any4Local } else { $any4Parent }
 $distPath = Join-Path $root "dist-smoke"
 $workPath = Join-Path $root "build-smoke"
-$exe = Join-Path $distPath "AgibotConverterShell\AgibotConverterShell.exe"
+$exe = Join-Path $distPath "DataConverterShell\DataConverterShell.exe"
 
 function Remove-PathIfExists([string]$path) {
     if (Test-Path $path) {
@@ -40,7 +44,7 @@ if (-not $SkipBuild) {
     }
 
     Get-Process -ErrorAction SilentlyContinue |
-        Where-Object { $_.ProcessName -in @("AgibotConverterShell", "flet") } |
+        Where-Object { $_.ProcessName -in @("DataConverterShell", "flet") } |
         Stop-Process -Force -ErrorAction SilentlyContinue
 
     Remove-PathIfExists $workPath
@@ -49,7 +53,7 @@ if (-not $SkipBuild) {
     & $py -m PyInstaller `
       --noconfirm `
       --windowed `
-      --name AgibotConverterShell `
+      --name DataConverterShell `
       --distpath $distPath `
       --workpath $workPath `
       --collect-all flet `
@@ -63,7 +67,7 @@ if (-not $SkipBuild) {
       --collect-all rosbags `
       --collect-submodules rosbags.typesys.stores `
       --add-data "$any4;any4lerobot" `
-      src/agibot_converter/main.py
+      src/data_converter/main.py
 }
 
 if (-not (Test-Path $exe)) {

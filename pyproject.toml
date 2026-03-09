@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agibot-converter-shell"
+name = "data-converter-shell"
 version = "0.1.0"
-description = "A Flet desktop shell for Agibot dataset conversion"
+description = "A Flet desktop shell for dataset conversion"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -3,12 +3,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-EXE_PATH = Path(r"D:\workspace\work\bwy\agibot-converter\dist\AgibotConverterShell\AgibotConverterShell.exe")
-INPUT_DIR = Path(r"D:\workspace\work\bwy\agibot-converter\演示用抓取任务_2013529099792277505_20260210_131921")
-OUTPUT_BASE = Path(r"D:\workspace\work\bwy\agibot-converter\smoke-runs")
+ROOT = Path(__file__).resolve().parent
+EXE_PATH = ROOT / "dist" / "DataConverterShell" / "DataConverterShell.exe"
+INPUT_DIR = ROOT / "演示用抓取任务_2013529099792277505_20260210_131921"
+OUTPUT_BASE = ROOT / "smoke-runs"
 
 # Test data (unzipped)
-TEST_SOURCE = Path(r"D:\workspace\work\bwy\agibot-converter\temp_test\4")
+TEST_SOURCE = ROOT / "temp_test" / "4"
 
 
 def test_hdf5_conversion():
@@ -71,7 +72,7 @@ def test_any4lerobot_conversion(version: str):
 
 def main():
     print("=" * 60)
-    print("Agibot Converter EXE Test")
+    print("Data Converter EXE Test")
     print("=" * 60)
 
     # Test HDF5 first (simplest)

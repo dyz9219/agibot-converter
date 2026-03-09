@@ -38,7 +38,7 @@ if (-not (Test-Path (Join-Path $assets "pku_logo.ico"))) {
   --noconfirm `
   --onefile `
   --windowed `
-  --name AgibotConverterShell `
+  --name DataConverterShell `
   --distpath "$root\dist-onefile" `
   --workpath "$root\build-onefile" `
   --collect-all flet `
@@ -55,6 +55,6 @@ if (-not (Test-Path (Join-Path $assets "pku_logo.ico"))) {
   --icon "$assets\pku_logo.ico" `
   --add-data "$any4;any4lerobot" `
   --add-data "$assets;assets" `
-  src/agibot_converter/main.py
+  src/data_converter/main.py
 
-Write-Host "Onefile build finished: dist-onefile/AgibotConverterShell.exe" -ForegroundColor Green
+Write-Host "Onefile build finished: dist-onefile/DataConverterShell.exe" -ForegroundColor Green

@@ -12,4 +12,4 @@ if (-not (Test-Path $py)) {
 
 & $py -m pip install -U pip
 & $py -m pip install -e .
-& $py -m agibot_converter.main
+& $py -m data_converter.main

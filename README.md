@@ -1,4 +1,4 @@
-# Agibot Converter (UI Shell)
+# Data Converter (UI Shell)
 
 This is a phase-1 scaffold for a desktop converter tool.
 
@@ -16,7 +16,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -U pip
 pip install -e .
-python -m agibot_converter.main
+python -m data_converter.main
 ```
 
 ## Build EXE (Windows)
@@ -31,7 +31,7 @@ LeRobot conversion uses this bundled module at runtime, so end users do not need
 `any4lerobot` manually.
 
 Output:
-- `dist/AgibotConverterShell/AgibotConverterShell.exe`
+- `dist/DataConverterShell/DataConverterShell.exe`
 
 ## EXE Smoke Regression (LeRobot)
 
@@ -49,4 +49,4 @@ Optional: skip build and reuse existing `dist-smoke`:
 ## Notes
 
 - This shell is intentionally backend-free for visual review.
-- Next phase can plug real conversion services into `src/agibot_converter/backend.py`.
+- Next phase can plug real conversion services into `src/data_converter/backend.py`.

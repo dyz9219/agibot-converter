@@ -1,4 +1,4 @@
-# Agibot Converter 打包协同手册（Fast/Full 双方案）
+# Data Converter 打包协同手册（Fast/Full 双方案）
 
 ## Claude Code 执行协议（强制）
 - 任何打包动作前，**必须先向用户提问**：
@@ -23,13 +23,13 @@
 ### Fast（推荐用于日常迭代）
 - 目的：快速验证“代码已打进包 + UI/预检/HDF5 链路可用”。
 - 依赖范围：轻依赖（不收集 `ray/torch/lerobot/agibot_utils/rosbags`）。
-- 产物路径：`dist/AgibotConverterShell-fast/AgibotConverterShell-fast.exe`
+- 产物路径：`dist/DataConverterShell-fast/DataConverterShell-fast.exe`
 - 适用场景：频繁改代码、快速回归、确认包内容最新。
 
 ### Full（推荐用于对外发布/联调）
 - 目的：完整功能交付（含 LeRobot 非 HDF5 和 Rosbag）。
 - 依赖范围：全量收集（`ray/torch/lerobot/agibot_utils/rosbags`）。
-- 产物路径：`dist/AgibotConverterShell-full/AgibotConverterShell-full.exe`
+- 产物路径：`dist/DataConverterShell-full/DataConverterShell-full.exe`
 - 适用场景：发同事、发测试、发布候选包。
 
 ## 标准命令
@@ -64,8 +64,8 @@ Set-Location D:\workspace\work\bwy\agibot-converter
 ### 门禁脚本
 ```powershell
 Set-Location D:\workspace\work\bwy\agibot-converter
-./scripts/verify_build_fingerprint.ps1 -ExePath "dist\AgibotConverterShell-fast\AgibotConverterShell-fast.exe"
-./scripts/verify_build_fingerprint.ps1 -ExePath "dist\AgibotConverterShell-full\AgibotConverterShell-full.exe"
+./scripts/verify_build_fingerprint.ps1 -ExePath "dist\DataConverterShell-fast\DataConverterShell-fast.exe"
+./scripts/verify_build_fingerprint.ps1 -ExePath "dist\DataConverterShell-full\DataConverterShell-full.exe"
 ```
 
 ### 通过标准
@@ -83,13 +83,13 @@ Set-Location D:\workspace\work\bwy\agibot-converter
 1. 指纹门禁通过：`verify_build_fingerprint.ps1`
 2. any4 健康检查：
 ```powershell
-dist\AgibotConverterShell-full\AgibotConverterShell-full.exe --internal-run-any4-health --version v3.0
-dist\AgibotConverterShell-full\AgibotConverterShell-full.exe --internal-run-any4-health --version v2.1
-dist\AgibotConverterShell-full\AgibotConverterShell-full.exe --internal-run-any4-health --version v2.0
+dist\DataConverterShell-full\DataConverterShell-full.exe --internal-run-any4-health --version v3.0
+dist\DataConverterShell-full\DataConverterShell-full.exe --internal-run-any4-health --version v2.1
+dist\DataConverterShell-full\DataConverterShell-full.exe --internal-run-any4-health --version v2.0
 ```
 3. rosbag 健康检查：
 ```powershell
-dist\AgibotConverterShell-full\AgibotConverterShell-full.exe --internal-run-rosbag-health --bag-type MCAP
+dist\DataConverterShell-full\DataConverterShell-full.exe --internal-run-rosbag-health --bag-type MCAP
 ```
 4. LeRobot 四版本 smoke（建议）
 
@@ -102,23 +102,23 @@ dist\AgibotConverterShell-full\AgibotConverterShell-full.exe --internal-run-rosb
 
 ## 本机复现同事环境（强制 bundled）
 - 背景：你本机常有 Python/依赖，转换器可能走 external python 回退路径，导致“本机正常、同事失败”难复现。
-- 配置名称：`AGIBOT_FORCE_BUNDLED`（环境变量，调试开关）
+- 配置名称：`DATA_CONVERTER_FORCE_BUNDLED`（环境变量，调试开关，兼容旧名 `AGIBOT_FORCE_BUNDLED`）
 - 启用值：`1`（等价真值：`true/yes/on`）
-- 新增调试开关示例：`AGIBOT_FORCE_BUNDLED=1`
+- 新增调试开关示例：`DATA_CONVERTER_FORCE_BUNDLED=1`
 - 作用范围：仅 LeRobot 非 HDF5（`v3.0/v2.1/v2.0`）强制禁用 external python，统一走 bundled 路径。
 - 默认行为（重要）：打包 EXE（`sys.frozen=True`）默认即 `force_bundled=1`，无需手动设置环境变量。
-- 如需临时关闭强制 bundled（仅调试）：设置 `AGIBOT_FORCE_BUNDLED=0`。
+- 如需临时关闭强制 bundled（仅调试）：设置 `DATA_CONVERTER_FORCE_BUNDLED=0`。
 - 用法（当前 PowerShell 会话）：
 ```powershell
-$env:AGIBOT_FORCE_BUNDLED = "1"
-dist\AgibotConverterShell-full\AgibotConverterShell-full.exe
+$env:DATA_CONVERTER_FORCE_BUNDLED = "1"
+dist\DataConverterShell-full\DataConverterShell-full.exe
 ```
 - 预期诊断特征（manifest/runtime_diagnostic）：
   - `force_bundled=1`
   - `mode=bundled`（或失败时 `fallback` 仍显示 `force_bundled=1`）
 - 结束后可恢复：
 ```powershell
-Remove-Item Env:AGIBOT_FORCE_BUNDLED -ErrorAction SilentlyContinue
+Remove-Item Env:DATA_CONVERTER_FORCE_BUNDLED -ErrorAction SilentlyContinue
 ```
 
 ## 常见问题

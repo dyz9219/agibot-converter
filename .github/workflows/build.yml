@@ -36,15 +36,15 @@ jobs:
           ./scripts/build_exe.ps1 -Profile full -Clean
       - name: Verify packaged any4
         run: |
-          ./scripts/verify_packaged_any4.ps1 -DistRoot dist/AgibotConverterShell-full
+          ./scripts/verify_packaged_any4.ps1 -DistRoot dist/DataConverterShell-full
       - name: Verify build fingerprint
         run: |
-          ./scripts/verify_build_fingerprint.ps1 -ExePath dist/AgibotConverterShell-full/AgibotConverterShell-full.exe
+          ./scripts/verify_build_fingerprint.ps1 -ExePath dist/DataConverterShell-full/DataConverterShell-full.exe
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgibotConverterShell-Windows-full
-          path: dist/AgibotConverterShell-full/
+          name: DataConverterShell-Windows-full
+          path: dist/DataConverterShell-full/
 
   build-linux-x64:
     runs-on: ubuntu-latest
@@ -73,15 +73,15 @@ jobs:
           if [ -d "$PWD/assets" ]; then
             EXTRA_ARGS+=(--add-data "$PWD/assets:assets")
           fi
-          python -m PyInstaller --noconfirm --onefile --windowed --name AgibotConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-submodules rosbags.typesys.stores --collect-data tkinter --add-data "$PWD/any4lerobot:any4lerobot" "${EXTRA_ARGS[@]}" src/agibot_converter/main.py
+          python -m PyInstaller --noconfirm --onefile --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-submodules rosbags.typesys.stores --collect-data tkinter --add-data "$PWD/any4lerobot:any4lerobot" "${EXTRA_ARGS[@]}" src/data_converter/main.py
       - name: Make executable
         run: |
-          chmod +x dist/AgibotConverterShell
+          chmod +x dist/DataConverterShell
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgibotConverterShell-Linux-x64
-          path: dist/AgibotConverterShell
+          name: DataConverterShell-Linux-x64
+          path: dist/DataConverterShell
 
   build-linux-arm64:
     runs-on: ubuntu-24.04-arm  # GitHub ARM runner
@@ -110,12 +110,12 @@ jobs:
           if [ -d "$PWD/assets" ]; then
             EXTRA_ARGS+=(--add-data "$PWD/assets:assets")
           fi
-          python -m PyInstaller --noconfirm --onefile --windowed --name AgibotConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-submodules rosbags.typesys.stores --collect-data tkinter --add-data "$PWD/any4lerobot:any4lerobot" "${EXTRA_ARGS[@]}" src/agibot_converter/main.py
+          python -m PyInstaller --noconfirm --onefile --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-submodules rosbags.typesys.stores --collect-data tkinter --add-data "$PWD/any4lerobot:any4lerobot" "${EXTRA_ARGS[@]}" src/data_converter/main.py
       - name: Make executable
         run: |
-          chmod +x dist/AgibotConverterShell
+          chmod +x dist/DataConverterShell
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgibotConverterShell-Linux-ARM64
-          path: dist/AgibotConverterShell
+          name: DataConverterShell-Linux-ARM64
+          path: dist/DataConverterShell
