@@ -19,6 +19,29 @@ from data_converter import any4lerobot_bridge
 
 
 class RawVideoMappingTests(unittest.TestCase):
+    def test_narrows_non_joint_vector_padding_16d(self) -> None:
+        root = Path.cwd() / ".tmp-tests" / f"raw-adapter-vector-{uuid.uuid4().hex[:8]}"
+        root.mkdir(parents=True, exist_ok=False)
+        try:
+            src_h5 = root / "aligned_joints.h5"
+            with h5py.File(src_h5, "w") as h5f:
+                h5f.create_dataset("timestamp", data=np.array([0.0, 1.0], dtype=np.float32))
+                h5f.create_dataset("state/head/position", data=np.array([[1.0], [2.0]], dtype=np.float32))
+
+            with h5py.File(src_h5, "r") as h5f:
+                result = raw_to_any4._normalize_raw_array(
+                    "state/head/position",
+                    np.array([[1.0], [2.0]], dtype=np.float32),
+                    2,
+                    (2,),
+                    h5f,
+                    {},
+                )
+
+            self.assertIsNone(result)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_preserves_14d_joint_with_valid_raw_effector_for_16d_schema(self) -> None:
         root = Path.cwd() / ".tmp-tests" / f"raw-adapter-legacy-{uuid.uuid4().hex[:8]}"
         root.mkdir(parents=True, exist_ok=False)
@@ -85,6 +108,11 @@ class RawVideoMappingTests(unittest.TestCase):
                 np.testing.assert_allclose(h5f["action/effector/position"][:], action_joint[:, 14:16])
                 self.assertFalse(np.array_equal(h5f["state/effector/position"][:], state_effector_bogus))
                 self.assertFalse(np.array_equal(h5f["action/effector/position"][:], action_effector_bogus))
+
+            self.assertTrue(
+                any("已优先采用 joint.position 派生值" in warning for warning in warnings),
+                warnings,
+            )
 
             self.assertFalse(
                 any("state/joint/position" in warning and "填充零值" in warning for warning in warnings),
