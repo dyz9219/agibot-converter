@@ -19,6 +19,44 @@ from data_converter import any4lerobot_bridge
 
 
 class RawVideoMappingTests(unittest.TestCase):
+    def test_preserves_14d_joint_with_valid_raw_effector_for_16d_schema(self) -> None:
+        root = Path.cwd() / ".tmp-tests" / f"raw-adapter-legacy-{uuid.uuid4().hex[:8]}"
+        root.mkdir(parents=True, exist_ok=False)
+        try:
+            src_h5 = root / "aligned_joints.h5"
+            dst_h5 = root / "proprio_stats.h5"
+            state_joint = np.arange(28, dtype=np.float32).reshape(2, 14)
+            action_joint = np.arange(28, dtype=np.float32).reshape(2, 14) + 100.0
+            state_effector = np.array([[1.5, 2.5], [3.5, 4.5]], dtype=np.float32)
+            action_effector = np.array([[5.5, 6.5], [7.5, 8.5]], dtype=np.float32)
+
+            with h5py.File(src_h5, "w") as h5f:
+                h5f.create_dataset("timestamp", data=np.array([0.0, 1.0], dtype=np.float32))
+                h5f.create_dataset("state/joint/position", data=state_joint)
+                h5f.create_dataset("action/joint/position", data=action_joint)
+                h5f.create_dataset("state/effector/position", data=state_effector)
+                h5f.create_dataset("action/effector/position", data=action_effector)
+
+            warnings: list[str] = []
+            raw_to_any4._build_proprio_stats(src_h5, dst_h5, warnings)
+
+            with h5py.File(dst_h5, "r") as h5f:
+                np.testing.assert_allclose(h5f["state/effector/position"][:], state_effector)
+                np.testing.assert_allclose(h5f["action/effector/position"][:], action_effector)
+                np.testing.assert_allclose(h5f["state/joint/position"][:, :14], state_joint)
+                np.testing.assert_allclose(h5f["action/joint/position"][:, :14], action_joint)
+
+            self.assertFalse(
+                any("state/effector/position" in warning and "填充零值" in warning for warning in warnings),
+                warnings,
+            )
+            self.assertFalse(
+                any("action/effector/position" in warning and "填充零值" in warning for warning in warnings),
+                warnings,
+            )
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_preserves_16d_joint_schema_and_effector_slice(self) -> None:
         root = Path.cwd() / ".tmp-tests" / f"raw-adapter-{uuid.uuid4().hex[:8]}"
         root.mkdir(parents=True, exist_ok=False)

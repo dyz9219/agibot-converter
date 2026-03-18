@@ -308,6 +308,8 @@ def _normalize_raw_array(
         derived = _derive_effector_from_joint(key, num_frames, src, cache)
         if derived is not None and tuple(derived.shape[1:]) == target_shape:
             return derived
+        if arr.ndim >= 1 and arr.shape[0] == num_frames and tuple(arr.shape[1:]) == target_shape:
+            return arr
     if arr.ndim == 2 and len(target_shape) == 1 and arr.shape[0] == num_frames:
         if key in {"state/joint/position", "action/joint/position", "state/joint/current_value"} and arr.shape[1] >= target_shape[0]:
             return arr[:, : target_shape[0]].astype(np.float32, copy=False)
@@ -370,3 +372,5 @@ def _is_raw_source(path: Path) -> bool:
         if (h5.parent / "state.json").exists():
             return True
     return False
+
+
