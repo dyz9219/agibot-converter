@@ -1,17 +1,58 @@
 from __future__ import annotations
 
-import tempfile
 import shutil
 import unittest
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
+import sys
+
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / "src"))
+
+import h5py
+import numpy as np
+
 from data_converter.adapters import raw_to_any4
 from data_converter import any4lerobot_bridge
 
 
 class RawVideoMappingTests(unittest.TestCase):
+    def test_preserves_16d_joint_schema_and_effector_slice(self) -> None:
+        root = Path.cwd() / ".tmp-tests" / f"raw-adapter-{uuid.uuid4().hex[:8]}"
+        root.mkdir(parents=True, exist_ok=False)
+        try:
+            src_h5 = root / "aligned_joints.h5"
+            dst_h5 = root / "proprio_stats.h5"
+            state_joint = np.arange(32, dtype=np.float32).reshape(2, 16)
+            action_joint = np.arange(32, dtype=np.float32).reshape(2, 16) + 100.0
+
+            with h5py.File(src_h5, "w") as h5f:
+                h5f.create_dataset("timestamp", data=np.array([0.0, 1.0], dtype=np.float32))
+                h5f.create_dataset("state/joint/position", data=state_joint)
+                h5f.create_dataset("action/joint/position", data=action_joint)
+
+            warnings: list[str] = []
+            raw_to_any4._build_proprio_stats(src_h5, dst_h5, warnings)
+
+            with h5py.File(dst_h5, "r") as h5f:
+                np.testing.assert_allclose(h5f["state/joint/position"][:], state_joint)
+                np.testing.assert_allclose(h5f["action/joint/position"][:], action_joint)
+                np.testing.assert_allclose(h5f["state/effector/position"][:], state_joint[:, 14:16])
+                np.testing.assert_allclose(h5f["action/effector/position"][:], action_joint[:, 14:16])
+
+            self.assertFalse(
+                any("state/joint/position" in warning and "填充零值" in warning for warning in warnings),
+                warnings,
+            )
+            self.assertFalse(
+                any("action/joint/position" in warning and "填充零值" in warning for warning in warnings),
+                warnings,
+            )
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_build_videos_copies_only_present_videos(self) -> None:
         root = Path.cwd() / ".tmp-tests" / f"video-map-{uuid.uuid4().hex[:8]}"
         raw_dir = root / "raw"

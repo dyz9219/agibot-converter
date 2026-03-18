@@ -211,8 +211,8 @@ def _build_proprio_stats(src_h5: Path, dst_h5: Path, warnings: list[str]) -> Non
         "end/orientation": (2, 4),
         "end/position": (2, 3),
         "head/position": (2,),
-        "joint/current_value": (14,),
-        "joint/position": (14,),
+        "joint/current_value": (16,),
+        "joint/position": (16,),
         "robot/orientation": (4,),
         "robot/position": (3,),
         "waist/position": (2,),
@@ -222,17 +222,26 @@ def _build_proprio_stats(src_h5: Path, dst_h5: Path, warnings: list[str]) -> Non
         "end/orientation": (2, 4),
         "end/position": (2, 3),
         "head/position": (2,),
-        "joint/position": (14,),
+        "joint/position": (16,),
         "robot/velocity": (2,),
         "waist/position": (2,),
     }
 
     with h5py.File(src_h5, "r") as src, h5py.File(dst_h5, "w") as dst:
         num_frames = _detect_num_frames(src)
+        cache: dict[str, np.ndarray] = {}
         for rel, shape in state_shapes.items():
-            _write_dataset(dst, f"state/{rel}", _read_or_default(src, f"state/{rel}", num_frames, shape, warnings))
+            _write_dataset(
+                dst,
+                f"state/{rel}",
+                _read_or_default(src, f"state/{rel}", num_frames, shape, warnings, cache),
+            )
         for rel, shape in action_shapes.items():
-            _write_dataset(dst, f"action/{rel}", _read_or_default(src, f"action/{rel}", num_frames, shape, warnings))
+            _write_dataset(
+                dst,
+                f"action/{rel}",
+                _read_or_default(src, f"action/{rel}", num_frames, shape, warnings, cache),
+            )
 
 
 def _detect_num_frames(src: h5py.File) -> int:
@@ -254,15 +263,76 @@ def _read_or_default(
     num_frames: int,
     target_shape: tuple[int, ...],
     warnings: list[str],
+    cache: dict[str, np.ndarray],
 ) -> np.ndarray:
-    if key in src:
-        arr = np.array(src[key], dtype=np.float32)
-        if arr.ndim >= 1 and arr.shape[0] == num_frames and tuple(arr.shape[1:]) == target_shape:
-            return arr
+    arr = _resolve_raw_array(src, key, cache)
+    if arr is not None:
+        normalized = _normalize_raw_array(key, arr, num_frames, target_shape, src, cache)
+        if normalized is not None:
+            if arr.shape != normalized.shape:
+                warnings.append(
+                    f"数据键 {key} 形状 {arr.shape} 与期望 {(num_frames, *target_shape)} 不一致，已重排到训练结构"
+                )
+            return normalized
         warnings.append(f"数据键 {key} 形状 {arr.shape} 与期望 {(num_frames, *target_shape)} 不一致，填充零值")
     else:
+        derived = _derive_effector_from_joint(key, num_frames, src, cache)
+        if derived is not None and tuple(derived.shape[1:]) == target_shape:
+            warnings.append(f"数据键 {key} 缺失，已从 joint.position 重建训练结构")
+            return derived
         warnings.append(f"数据键 {key} 缺失，填充零值")
     return np.zeros((num_frames, *target_shape), dtype=np.float32)
+
+
+def _resolve_raw_array(src: h5py.File, key: str, cache: dict[str, np.ndarray]) -> np.ndarray | None:
+    if key in cache:
+        return cache[key]
+    if key not in src:
+        return None
+    arr = np.array(src[key], dtype=np.float32)
+    cache[key] = arr
+    return arr
+
+
+def _normalize_raw_array(
+    key: str,
+    arr: np.ndarray,
+    num_frames: int,
+    target_shape: tuple[int, ...],
+    src: h5py.File,
+    cache: dict[str, np.ndarray],
+) -> np.ndarray | None:
+    if arr.ndim >= 1 and arr.shape[0] == num_frames and tuple(arr.shape[1:]) == target_shape:
+        return arr
+    if arr.ndim == 2 and len(target_shape) == 1 and arr.shape[0] == num_frames:
+        if key in {"state/joint/position", "action/joint/position", "state/joint/current_value"} and arr.shape[1] >= target_shape[0]:
+            return arr[:, : target_shape[0]].astype(np.float32, copy=False)
+        if arr.shape[1] < target_shape[0]:
+            out = np.zeros((num_frames, target_shape[0]), dtype=np.float32)
+            out[:, : arr.shape[1]] = arr
+            return out
+    if key in {"state/effector/position", "action/effector/position"}:
+        derived = _derive_effector_from_joint(key, num_frames, src, cache)
+        if derived is not None and tuple(derived.shape[1:]) == target_shape:
+            return derived
+    if arr.ndim == 1 and len(target_shape) == 1 and arr.shape[0] == num_frames and target_shape[0] == 2:
+        out = np.zeros((num_frames, 2), dtype=np.float32)
+        out[:, 0] = arr
+        return out
+    return None
+
+
+def _derive_effector_from_joint(
+    key: str,
+    num_frames: int,
+    src: h5py.File,
+    cache: dict[str, np.ndarray],
+) -> np.ndarray | None:
+    joint_key = key.replace("effector", "joint")
+    joint_arr = _resolve_raw_array(src, joint_key, cache)
+    if joint_arr is None or joint_arr.ndim != 2 or joint_arr.shape[0] != num_frames or joint_arr.shape[1] < 16:
+        return None
+    return joint_arr[:, 14:16].astype(np.float32, copy=False)
 
 
 def _write_dataset(dst: h5py.File, key: str, value: np.ndarray) -> None:
@@ -299,3 +369,4 @@ def _is_raw_source(path: Path) -> bool:
         if (h5.parent / "state.json").exists():
             return True
     return False
+
