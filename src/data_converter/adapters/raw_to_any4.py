@@ -302,8 +302,12 @@ def _normalize_raw_array(
     src: h5py.File,
     cache: dict[str, np.ndarray],
 ) -> np.ndarray | None:
-    if arr.ndim >= 1 and arr.shape[0] == num_frames and tuple(arr.shape[1:]) == target_shape:
+    if key not in {"state/effector/position", "action/effector/position"} and arr.ndim >= 1 and arr.shape[0] == num_frames and tuple(arr.shape[1:]) == target_shape:
         return arr
+    if key in {"state/effector/position", "action/effector/position"}:
+        derived = _derive_effector_from_joint(key, num_frames, src, cache)
+        if derived is not None and tuple(derived.shape[1:]) == target_shape:
+            return derived
     if arr.ndim == 2 and len(target_shape) == 1 and arr.shape[0] == num_frames:
         if key in {"state/joint/position", "action/joint/position", "state/joint/current_value"} and arr.shape[1] >= target_shape[0]:
             return arr[:, : target_shape[0]].astype(np.float32, copy=False)
@@ -311,14 +315,11 @@ def _normalize_raw_array(
             out = np.zeros((num_frames, target_shape[0]), dtype=np.float32)
             out[:, : arr.shape[1]] = arr
             return out
-    if key in {"state/effector/position", "action/effector/position"}:
-        derived = _derive_effector_from_joint(key, num_frames, src, cache)
-        if derived is not None and tuple(derived.shape[1:]) == target_shape:
-            return derived
     if arr.ndim == 1 and len(target_shape) == 1 and arr.shape[0] == num_frames and target_shape[0] == 2:
         out = np.zeros((num_frames, 2), dtype=np.float32)
         out[:, 0] = arr
         return out
+
     return None
 
 
@@ -369,4 +370,3 @@ def _is_raw_source(path: Path) -> bool:
         if (h5.parent / "state.json").exists():
             return True
     return False
-

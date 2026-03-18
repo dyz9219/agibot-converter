@@ -27,11 +27,15 @@ class RawVideoMappingTests(unittest.TestCase):
             dst_h5 = root / "proprio_stats.h5"
             state_joint = np.arange(32, dtype=np.float32).reshape(2, 16)
             action_joint = np.arange(32, dtype=np.float32).reshape(2, 16) + 100.0
+            state_effector_bogus = np.full((2, 2), -1.0, dtype=np.float32)
+            action_effector_bogus = np.full((2, 2), -2.0, dtype=np.float32)
 
             with h5py.File(src_h5, "w") as h5f:
                 h5f.create_dataset("timestamp", data=np.array([0.0, 1.0], dtype=np.float32))
                 h5f.create_dataset("state/joint/position", data=state_joint)
                 h5f.create_dataset("action/joint/position", data=action_joint)
+                h5f.create_dataset("state/effector/position", data=state_effector_bogus)
+                h5f.create_dataset("action/effector/position", data=action_effector_bogus)
 
             warnings: list[str] = []
             raw_to_any4._build_proprio_stats(src_h5, dst_h5, warnings)
@@ -41,6 +45,8 @@ class RawVideoMappingTests(unittest.TestCase):
                 np.testing.assert_allclose(h5f["action/joint/position"][:], action_joint)
                 np.testing.assert_allclose(h5f["state/effector/position"][:], state_joint[:, 14:16])
                 np.testing.assert_allclose(h5f["action/effector/position"][:], action_joint[:, 14:16])
+                self.assertFalse(np.array_equal(h5f["state/effector/position"][:], state_effector_bogus))
+                self.assertFalse(np.array_equal(h5f["action/effector/position"][:], action_effector_bogus))
 
             self.assertFalse(
                 any("state/joint/position" in warning and "填充零值" in warning for warning in warnings),
