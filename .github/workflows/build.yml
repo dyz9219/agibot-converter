@@ -73,15 +73,15 @@ jobs:
           if [ -d "$PWD/assets" ]; then
             EXTRA_ARGS+=(--add-data "$PWD/assets:assets")
           fi
-          python -m PyInstaller --noconfirm --onefile --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-submodules rosbags.typesys.stores --collect-data tkinter --add-data "$PWD/any4lerobot:any4lerobot" "${EXTRA_ARGS[@]}" src/data_converter/main.py
+          python -m PyInstaller --noconfirm --onedir --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-submodules rosbags.typesys.stores --collect-data tkinter --add-data "$PWD/any4lerobot:any4lerobot" "${EXTRA_ARGS[@]}" src/data_converter/main.py
       - name: Make executable
         run: |
-          chmod +x dist/DataConverterShell
+          chmod +x dist/DataConverterShell/DataConverterShell
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: DataConverterShell-Linux-x64
-          path: dist/DataConverterShell
+          path: dist/DataConverterShell/
 
   build-linux-arm64:
     runs-on: ubuntu-24.04-arm  # GitHub ARM runner
