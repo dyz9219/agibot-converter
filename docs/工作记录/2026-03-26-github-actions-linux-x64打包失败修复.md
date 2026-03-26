@@ -84,3 +84,37 @@ struct.error: 'I' format requires 0 <= number <= 4294967295
 - `PyInstaller --onefile` 在 `linux-x64` 上命中 4GB 单文件封包上限。
 
 当前修复方案是先保证 CI 能稳定产物输出，再通过依赖 pin 降低后续漂移风险。
+
+## 2026-03-26 第二轮修复：三平台依赖解算失败
+
+### 现象
+- 新 run `23583208914` 中，`build-windows`、`build-linux-x64`、`build-linux-arm64` 全部失败。
+- 三个 job 都没有进入打包阶段，统一失败在安装依赖步骤。
+
+### 根因
+- 三个平台的失败日志一致，都是 pip 依赖解算冲突：
+
+```text
+The conflict is caused by:
+  data-converter-shell depends on torchvision==0.17.2
+  lerobot 0.4.4 depends on torchvision<0.26.0 and >=0.21.0
+```
+
+- 也就是说，前一轮把 `pyproject.toml` 直接 pin 到“本地已验证可工作版本”后，虽然运行时组合可用，但它和 `lerobot 0.4.4` 的官方 metadata 本身冲突，导致 CI 的 `pip install -e .[dev]` 在三平台全部提前失败。
+
+### 修复方案
+- 保留前一轮的 `linux-x64` `--onedir` 修复；
+- 改为在 GitHub Actions 中显式安装“已验证可工作”的构建环境；
+- 对 `lerobot==0.4.4` 与本项目自身使用 `--no-deps` 安装，绕开 pip 对冲突 metadata 的强制解算；
+- 其余构建所需依赖由 workflow 先行显式安装。
+
+### 实际修改
+- 更新 `.github/workflows/build.yml` 三个平台的安装步骤：
+  - 先安装 `setuptools<81`；
+  - 先安装固定的构建依赖与运行依赖；
+  - `python -m pip install --no-deps "lerobot==0.4.4"`
+  - `python -m pip install --no-deps -e ".[dev]"`
+
+### 当前状态
+- 已完成 workflow 修改并通过本地静态检查；
+- 准备提交并重新触发 GitHub Actions 继续验证。
