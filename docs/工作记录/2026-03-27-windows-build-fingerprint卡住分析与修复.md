@@ -272,3 +272,81 @@ Windows 卡住不是单一业务代码问题，而是：
   - `linux-x64` smoke test 通过
   - `linux-arm64` smoke test 通过
   作为最终验收标准。
+
+## 同日补充三：Linux any4 健康检查误判失败
+
+### 新现象
+
+在补齐 Linux `build_meta.json` 打包后，新的 run 中：
+
+- `build-linux-x64` 通过 `--internal-build-info`
+- `build-linux-x64` 通过 `--internal-run-rosbag-health --bag-type MCAP`
+- 但 `--internal-run-any4-health --version v3.0` 失败
+
+`linux-arm64` 也出现相同模式。
+
+### 根因分析
+
+过滤 Linux job 日志后，关键输出为：
+
+- `ROSBAG_HEALTH_OK`
+- `ANY4_HEALTH_FAIL`
+- `missing=psutil_runtime`
+- `bundled_error=ModuleNotFoundError: No module named 'psutil._psutil_windows'`
+- 同时日志显示包内实际存在的是 `psutil_files=_psutil_linux.abi3.so`
+
+这说明：
+
+- 打包后的 Linux 程序已经能启动、能读 `build_meta.json`、能完成 rosbag 健康检查；
+- 真正失败的是 `src/data_converter/any4_health.py` 中 `_probe_psutil_runtime()` 的平台判断写死成了 Windows 私有扩展：
+  - `psutil._psutil_windows`
+  - `ray.thirdparty_files.psutil._psutil_windows`
+- 在 Linux 产物中，正确的目标应当是：
+  - `psutil._psutil_linux`
+  - `ray.thirdparty_files.psutil._psutil_linux`
+
+因此，这是一个 bundled any4 运行时探针的跨平台误判问题，而不是“缩包后 any4 真不能用”的直接证据。
+
+### 本轮修复
+
+更新文件：
+
+- `src/data_converter/any4_health.py`
+
+修改内容：
+
+1. 为 psutil runtime 探针增加按平台选择私有扩展名的逻辑
+   - Windows: `_psutil_windows`
+   - Linux: `_psutil_linux`
+   - macOS: `_psutil_osx`
+   - 其他 POSIX: `_psutil_posix`
+2. bundled 轻量探针与 frozen 导入探针都改为使用平台对应模块名
+3. 失败诊断中额外输出：
+   - `private_module`
+   - `ray_private_module`
+   - `ray_psutil_files`
+
+这样若后续仍失败，日志会直接告诉我们它实际找的是哪个平台模块、包里又有哪些文件。
+
+### 本轮验证
+
+已完成：
+
+1. 读取 Linux x64 / arm64 job 日志，确认失败点一致为 `psutil._psutil_windows` 误判。
+2. 本地执行：
+   - `python -m py_compile src/data_converter/any4_health.py`
+   - 结果通过。
+
+### 当前结论更新
+
+截至当前，关于“缩包以后这个包能不能正常用”的判断应更新为：
+
+- 已证实的部分：
+  - `linux-x64` 已切换到 CPU-only PyTorch 安装路径；
+  - Linux 包能启动；
+  - `build_meta.json` 已成功打入；
+  - rosbag 健康检查可通过。
+- 尚未最终证实的部分：
+  - any4 bundled runtime 还需要经过这次平台修正后的下一轮 CI 验证。
+
+也就是说，当前剩下的是一个明确、可复现、已修补的跨平台探针问题，不再是之前那种“包太大且没有可用性证明”的状态。
