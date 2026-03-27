@@ -219,3 +219,56 @@ Windows 卡住不是单一业务代码问题，而是：
 - Linux 产物增加打包后基础健康检查，避免只缩体积、不验证可用性。
 
 下一步应提交并触发新 run，以“体积下降 + smoke test 全绿”作为新的验收标准。
+
+## 同日补充二：Linux smoke test 失败根因与继续修复
+
+### 新现象
+
+提交 `fix(ci): shrink linux x64 artifact and smoke test binaries` 后，新的 run：
+
+- `build-linux-x64` 构建步骤成功，但 `Smoke test binary` 失败
+- `build-linux-arm64` 构建步骤成功，但 `Smoke test binary` 失败
+
+说明新的 Linux smoke test 已经生效，并且成功把打包后运行问题拦了出来。
+
+### 新根因分析
+
+进一步查看 Linux job 日志后，确认两点：
+
+1. `linux-x64` 已经切换到 CPU-only PyTorch 安装
+   - 日志中明确执行：
+     - `python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.2.2" "torchvision==0.17.2"`
+   - 这说明“误装 CUDA/NVIDIA 大包”的方向已经被修正。
+2. Linux smoke test 的第一个检查 `--internal-build-info` 直接失败
+   - `src/data_converter/main.py` 中该命令依赖 `assets/build_meta.json`
+   - Windows `scripts/build_exe.ps1` 会先生成 `build/build-meta/build_meta.json`，再通过 `--add-data "$metaPath;assets"` 打进产物
+   - 但 Linux workflow 之前的 PyInstaller 命令没有打入这份 metadata 文件
+
+因此，这一轮失败的直接原因不是转换能力损坏，而是：
+
+- Linux 打包链路缺少与 Windows 对齐的 `build_meta.json` 注入步骤；
+- smoke test 正好把这个遗漏暴露出来。
+
+### 继续改动方案
+
+在原有修复基础上继续补齐：
+
+1. 为 `build-linux-x64` / `build-linux-arm64` 增加 `Generate build metadata` 步骤
+   - 在 `build/build-meta/build_meta.json` 生成最小可用 metadata
+2. 更新 Linux PyInstaller 命令
+   - 增加 `--add-data "$PWD/build/build-meta/build_meta.json:assets"`
+3. 调整 Linux smoke test 输出
+   - 将 `--internal-build-info >/tmp/build-info.json` 改为 `| tee /tmp/build-info.json`
+   - 这样若后续再次失败，可直接从 Actions 日志看到具体输出，而不是只看到 exit code
+
+### 当前结论更新
+
+截至目前，可以确认：
+
+- `linux-x64` 体积异常的主因已经改到正确方向，即改用 CPU-only PyTorch；
+- 但“缩包后功能不受影响”还不能宣称已完成验证，因为新增 smoke test 已证明 Linux 打包链路还有 metadata 漏打包问题；
+- 本轮已继续补齐 Linux metadata 注入，下一次 run 应以：
+  - `linux-x64` 体积下降
+  - `linux-x64` smoke test 通过
+  - `linux-arm64` smoke test 通过
+  作为最终验收标准。
