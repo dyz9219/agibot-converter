@@ -5,7 +5,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('D:\\workspace\\work\\bwy\\agibot-converter\\any4lerobot', 'any4lerobot'), ('D:\\workspace\\work\\bwy\\agibot-converter\\assets', 'assets'), ('D:\\workspace\\work\\bwy\\agibot-converter\\build\\build-meta\\build_meta.json', 'assets')]
 binaries = []
-hiddenimports = ['psutil._psutil_windows']
+hiddenimports = ['psutil._psutil_windows', 'ray.thirdparty_files.psutil._psutil_windows']
 datas += collect_data_files('tkinter')
 hiddenimports += collect_submodules('rosbags.typesys.stores')
 tmp_ret = collect_all('flet')
@@ -23,6 +23,8 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('agibot_utils')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('psutil')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('ray.thirdparty_files.psutil')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('rosbags')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]

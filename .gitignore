@@ -41,3 +41,10 @@ Thumbs.db
 
 # Egg info
 *.egg-info/
+
+# Local caches and downloaded CI artifacts
+.hf-local/
+out_*/
+*.html
+*.json
+*.zip

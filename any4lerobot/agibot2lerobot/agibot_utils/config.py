@@ -57,7 +57,7 @@ AgiBotWorld_BETA_GRIPPER_CONFIG = {
         "head.position": {"dtype": "float32", "shape": (2,), "names": {"motors": ["yaw", "patch"]}},
         "joint.current_value": {
             "dtype": "float32",
-            "shape": (14,),
+            "shape": (16,),
             "names": {
                 "motors": [
                     "left_arm_0",
@@ -74,12 +74,14 @@ AgiBotWorld_BETA_GRIPPER_CONFIG = {
                     "right_arm_4",
                     "right_arm_5",
                     "right_arm_6",
+                    "left_gripper",
+                    "right_gripper",
                 ]
             },
         },
         "joint.position": {
             "dtype": "float32",
-            "shape": (14,),
+            "shape": (16,),
             "names": {
                 "motors": [
                     "left_arm_0",
@@ -96,6 +98,8 @@ AgiBotWorld_BETA_GRIPPER_CONFIG = {
                     "right_arm_4",
                     "right_arm_5",
                     "right_arm_6",
+                    "left_gripper",
+                    "right_gripper",
                 ]
             },
         },
@@ -114,7 +118,7 @@ AgiBotWorld_BETA_GRIPPER_CONFIG = {
         "head.position": {"dtype": "float32", "shape": (2,), "names": {"motors": ["yaw", "patch"]}},
         "joint.position": {
             "dtype": "float32",
-            "shape": (14,),
+            "shape": (16,),
             "names": {
                 "motors": [
                     "left_arm_0",
@@ -131,6 +135,8 @@ AgiBotWorld_BETA_GRIPPER_CONFIG = {
                     "right_arm_4",
                     "right_arm_5",
                     "right_arm_6",
+                    "left_gripper",
+                    "right_gripper",
                 ]
             },
         },

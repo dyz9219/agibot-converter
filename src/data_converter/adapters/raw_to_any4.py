@@ -266,16 +266,27 @@ def _read_or_default(
     cache: dict[str, np.ndarray],
 ) -> np.ndarray:
     arr = _resolve_raw_array(src, key, cache)
+    if key in {"state/effector/position", "action/effector/position"}:
+        derived = _derive_effector_from_joint(key, num_frames, src, cache)
+        split = _derive_effector_from_split_fields(key, num_frames, src, cache)
+        normalized = _normalize_raw_array(key, arr, num_frames, target_shape, src, cache)
+        if normalized is not None:
+            if derived is not None and arr is not None:
+                warnings.append(f"数据键 {key} 已优先采用 joint.position 派生值，忽略原始 effector 数据")
+            elif split is not None and arr is None:
+                warnings.append(f"数据键 {key} 缺失，已由 left/right effector 字段重建")
+            elif derived is not None and arr is None:
+                warnings.append(f"数据键 {key} 缺失，已从 joint.position 重建训练结构")
+            return normalized
+        if arr is not None:
+            warnings.append(f"数据键 {key} 形状 {arr.shape} 与期望 {(num_frames, *target_shape)} 不一致，填充零值")
+        else:
+            warnings.append(f"数据键 {key} 缺失，填充零值")
+        return np.zeros((num_frames, *target_shape), dtype=np.float32)
+
     if arr is not None:
         normalized = _normalize_raw_array(key, arr, num_frames, target_shape, src, cache)
         if normalized is not None:
-            if key in {"state/effector/position", "action/effector/position"}:
-                derived = _derive_effector_from_joint(key, num_frames, src, cache)
-                if derived is not None and tuple(derived.shape[1:]) == target_shape:
-                    warnings.append(
-                        f"数据键 {key} 已优先采用 joint.position 派生值，忽略原始 effector 数据"
-                    )
-                    return derived
             if arr.shape != normalized.shape:
                 warnings.append(
                     f"数据键 {key} 形状 {arr.shape} 与期望 {(num_frames, *target_shape)} 不一致，已重排到训练结构"
@@ -283,10 +294,6 @@ def _read_or_default(
             return normalized
         warnings.append(f"数据键 {key} 形状 {arr.shape} 与期望 {(num_frames, *target_shape)} 不一致，填充零值")
     else:
-        derived = _derive_effector_from_joint(key, num_frames, src, cache)
-        if derived is not None and tuple(derived.shape[1:]) == target_shape:
-            warnings.append(f"数据键 {key} 缺失，已从 joint.position 重建训练结构")
-            return derived
         warnings.append(f"数据键 {key} 缺失，填充零值")
     return np.zeros((num_frames, *target_shape), dtype=np.float32)
 
@@ -303,32 +310,100 @@ def _resolve_raw_array(src: h5py.File, key: str, cache: dict[str, np.ndarray]) -
 
 def _normalize_raw_array(
     key: str,
-    arr: np.ndarray,
+    arr: np.ndarray | None,
     num_frames: int,
     target_shape: tuple[int, ...],
     src: h5py.File,
     cache: dict[str, np.ndarray],
 ) -> np.ndarray | None:
-    if key not in {"state/effector/position", "action/effector/position"} and arr.ndim >= 1 and arr.shape[0] == num_frames and tuple(arr.shape[1:]) == target_shape:
+    if arr is not None and key not in {"state/effector/position", "action/effector/position"} and arr.ndim >= 1 and arr.shape[0] == num_frames and tuple(arr.shape[1:]) == target_shape:
         return arr
     if key in {"state/effector/position", "action/effector/position"}:
-        derived = _derive_effector_from_joint(key, num_frames, src, cache)
-        if derived is not None and tuple(derived.shape[1:]) == target_shape:
-            return derived
-        if arr.ndim >= 1 and arr.shape[0] == num_frames and tuple(arr.shape[1:]) == target_shape:
+        resolved = _resolve_effector_array(key, num_frames, src, cache)
+        if resolved is not None and tuple(resolved.shape[1:]) == target_shape:
+            return resolved
+        if arr is not None and arr.ndim >= 1 and arr.shape[0] == num_frames and tuple(arr.shape[1:]) == target_shape:
             return arr
-    if arr.ndim == 2 and len(target_shape) == 1 and arr.shape[0] == num_frames:
+    if arr is not None and arr.ndim == 2 and len(target_shape) == 1 and arr.shape[0] == num_frames:
         if key in {"state/joint/position", "action/joint/position", "state/joint/current_value"} and arr.shape[1] >= target_shape[0]:
             return arr[:, : target_shape[0]].astype(np.float32, copy=False)
         if key in {"state/joint/position", "action/joint/position", "state/joint/current_value"} and arr.shape[1] < target_shape[0]:
             out = np.zeros((num_frames, target_shape[0]), dtype=np.float32)
             out[:, : arr.shape[1]] = arr
+            effector = _resolve_effector_array(_joint_to_effector_key(key), num_frames, src, cache)
+            if effector is not None and arr.shape[1] + effector.shape[1] <= target_shape[0]:
+                out[:, arr.shape[1] : arr.shape[1] + effector.shape[1]] = effector
             return out
-    if arr.ndim == 1 and len(target_shape) == 1 and arr.shape[0] == num_frames and target_shape[0] == 2:
+    if arr is not None and arr.ndim == 1 and len(target_shape) == 1 and arr.shape[0] == num_frames and target_shape[0] == 2:
         out = np.zeros((num_frames, 2), dtype=np.float32)
         out[:, 0] = arr
         return out
 
+    return None
+
+
+def _joint_to_effector_key(key: str) -> str:
+    prefix = key.split('/', 1)[0]
+    return f"{prefix}/effector/position"
+
+
+def _resolve_effector_array(
+    key: str,
+    num_frames: int,
+    src: h5py.File,
+    cache: dict[str, np.ndarray],
+) -> np.ndarray | None:
+    derived = _derive_effector_from_joint(key, num_frames, src, cache)
+    if derived is not None:
+        return derived
+
+    arr = _resolve_raw_array(src, key, cache)
+    normalized = _normalize_effector_array(arr, num_frames)
+    if normalized is not None:
+        return normalized
+
+    return _derive_effector_from_split_fields(key, num_frames, src, cache)
+
+
+def _normalize_effector_array(arr: np.ndarray | None, num_frames: int) -> np.ndarray | None:
+    if arr is None:
+        return None
+    if arr.ndim == 2 and arr.shape == (num_frames, 2):
+        return arr.astype(np.float32, copy=False)
+    if arr.ndim == 1 and arr.shape[0] == num_frames:
+        out = np.zeros((num_frames, 2), dtype=np.float32)
+        out[:, 0] = arr.astype(np.float32, copy=False)
+        return out
+    if arr.ndim == 2 and arr.shape == (num_frames, 1):
+        out = np.zeros((num_frames, 2), dtype=np.float32)
+        out[:, 0] = arr[:, 0].astype(np.float32, copy=False)
+        return out
+    return None
+
+
+def _derive_effector_from_split_fields(
+    key: str,
+    num_frames: int,
+    src: h5py.File,
+    cache: dict[str, np.ndarray],
+) -> np.ndarray | None:
+    prefix = key.split('/', 1)[0]
+    left = _resolve_raw_array(src, f"{prefix}/left_effector/position", cache)
+    right = _resolve_raw_array(src, f"{prefix}/right_effector/position", cache)
+    left_col = _normalize_effector_channel(left, num_frames)
+    right_col = _normalize_effector_channel(right, num_frames)
+    if left_col is None or right_col is None:
+        return None
+    return np.concatenate([left_col, right_col], axis=1)
+
+
+def _normalize_effector_channel(arr: np.ndarray | None, num_frames: int) -> np.ndarray | None:
+    if arr is None:
+        return None
+    if arr.ndim == 2 and arr.shape == (num_frames, 1):
+        return arr.astype(np.float32, copy=False)
+    if arr.ndim == 1 and arr.shape[0] == num_frames:
+        return arr.reshape(num_frames, 1).astype(np.float32, copy=False)
     return None
 
 

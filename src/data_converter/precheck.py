@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .any4_health import check_any4_runtime
 from .discovery import discover_sources
-from .models import ConversionOptions, PrecheckResult, SourceItem, TaskPlan, TaskStatus, TargetKind
+from .models import MAX_CONCURRENCY, ConversionOptions, PrecheckResult, SourceItem, TaskPlan, TaskStatus, TargetKind
 from .path_risk import assess_path_risk
 from .routing import output_suffix
 
@@ -27,6 +27,8 @@ def run_precheck(options: ConversionOptions) -> PrecheckResult:
 
     if options.concurrency <= 0:
         errors.append("并发数必须大于 0")
+    if options.concurrency > MAX_CONCURRENCY:
+        errors.append(f"并发数不能大于 {MAX_CONCURRENCY}")
 
     if options.target is TargetKind.LEROBOT:
         if options.lerobot_version not in {"v3.0", "v2.1", "v2.0", "HDF5"}:

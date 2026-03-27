@@ -5,24 +5,27 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import multiprocessing
 import shutil
 import sys
 from pathlib import Path
 
-import flet as ft
+ft = None
 
 try:
     from .any4_health import check_any4_runtime
     from .any4lerobot_bridge import run_any4lerobot_cli
     from .backend import ConversionBackend, build_options
-    from .models import TaskStatus
+    from .models import MAX_CONCURRENCY, TaskStatus
     from .process_tracker import terminate_all_children
+    from .worker_shard_cli import run_worker_shard_cli
 except ImportError:
     from data_converter.any4_health import check_any4_runtime
     from data_converter.any4lerobot_bridge import run_any4lerobot_cli
     from data_converter.backend import ConversionBackend, build_options
-    from data_converter.models import TaskStatus
+    from data_converter.models import MAX_CONCURRENCY, TaskStatus
     from data_converter.process_tracker import terminate_all_children
+    from data_converter.worker_shard_cli import run_worker_shard_cli
 
 BG = "#f5f5f7"
 PANEL = "#FFFFFF"
@@ -289,6 +292,18 @@ def _build(page: ft.Page) -> ft.Control:
     bag_type_shell = _uniform_input_shell(bag_type, WIDTH_M)
     bag_type.visible = False
 
+    embed_videos = ft.Checkbox(
+        value=False,
+        label="将视频逐帧写入 parquet（体积会显著增大）",
+        label_style=ft.TextStyle(size=BODY_SIZE, color=TEXT, font_family=FONT_FAMILY),
+        active_color=PRIMARY,
+    )
+    embed_hint = ft.Text(
+        "关闭时按默认 LeRobot 方式外置保存 mp4；开启后会把 head、hand_left、hand_right 每帧图像写入 parquet。",
+        size=SUB_SIZE,
+        color=MUTED,
+    )
+
     concurrent = ft.DropdownM2(
         value="4",
         dense=True,
@@ -297,7 +312,7 @@ def _build(page: ft.Page) -> ft.Control:
         text_size=BODY_SIZE,
         border_width=0,
         content_padding=ft.padding.only(left=0, right=0, top=8, bottom=8),
-        options=[ft.dropdownm2.Option(str(i)) for i in range(1, 9)],
+        options=[ft.dropdownm2.Option(str(i)) for i in range(4, MAX_CONCURRENCY + 1, 4)],
     )
     concurrent_shell = _uniform_input_shell(concurrent, WIDTH_S)
 
@@ -409,6 +424,9 @@ def _build(page: ft.Page) -> ft.Control:
         row_le.visible = is_le
         row_rb.visible = not is_le
         bag_type.visible = not is_le
+        show_embed = is_le and (version.value or "v3.0") != "HDF5"
+        embed_videos.visible = show_embed
+        embed_hint.visible = show_embed
 
     def _build_opts():
         return build_options(
@@ -419,6 +437,7 @@ def _build(page: ft.Page) -> ft.Control:
             fps=fps.value or "30",
             bag_type=bag_type.value or "MCAP",
             concurrency=concurrent.value or "4",
+            embed_videos_in_parquet=bool(embed_videos.value),
         )
 
     def _precheck(_: ft.ControlEvent) -> None:
@@ -777,6 +796,11 @@ def _build(page: ft.Page) -> ft.Control:
     seg_left.on_click = _choose_l
     seg_right.content = ft.Text("AgiBot 转 Rosbag", size=BODY_SIZE, color=TEXT, weight=ft.FontWeight.W_500, no_wrap=True)
     seg_right.on_click = _choose_r
+    def _on_version_change(_: ft.ControlEvent) -> None:
+        _sync_target()
+        page.update()
+
+    version.on_change = _on_version_change
     _sync_target()
 
     header = ft.Container(
@@ -902,6 +926,8 @@ def _build(page: ft.Page) -> ft.Control:
                 _path_selector("输出路径", output, _pick_output),
                 ft.Row(spacing=8, controls=[seg_left, seg_right]),
                 row_le,
+                embed_videos,
+                embed_hint,
                 row_rb,
                 ft.Row(
                     spacing=10,
@@ -959,6 +985,7 @@ def _run_internal_conversion_cli(argv: list[str]) -> int:
     parser.add_argument("--fps", default="30")
     parser.add_argument("--bag-type", default="MCAP")
     parser.add_argument("--concurrency", default="4")
+    parser.add_argument("--embed-videos-in-parquet", action="store_true")
     args = parser.parse_args(argv)
 
     backend = ConversionBackend()
@@ -970,6 +997,7 @@ def _run_internal_conversion_cli(argv: list[str]) -> int:
         fps=args.fps,
         bag_type=args.bag_type,
         concurrency=args.concurrency,
+        embed_videos_in_parquet=args.embed_videos_in_parquet,
     )
     result = backend.precheck(options)
     if not result.ok:
@@ -1044,15 +1072,33 @@ def _run_internal_build_info_cli(argv: list[str]) -> int:
     return 0
 
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--internal-run-any4lerobot":
-        raise SystemExit(run_any4lerobot_cli(sys.argv[2:]))
-    if len(sys.argv) > 1 and sys.argv[1] == "--internal-run-conversion":
-        raise SystemExit(_run_internal_conversion_cli(sys.argv[2:]))
-    if len(sys.argv) > 1 and sys.argv[1] == "--internal-run-rosbag-health":
-        raise SystemExit(_run_internal_rosbag_health_cli(sys.argv[2:]))
-    if len(sys.argv) > 1 and sys.argv[1] == "--internal-run-any4-health":
-        raise SystemExit(_run_internal_any4_health_cli(sys.argv[2:]))
-    if len(sys.argv) > 1 and sys.argv[1] == "--internal-build-info":
-        raise SystemExit(_run_internal_build_info_cli(sys.argv[2:]))
+def _ensure_flet() -> None:
+    global ft
+    if ft is None:
+        import flet as _ft
+
+        ft = _ft
+
+
+def run_cli_entry(argv: list[str] | None = None) -> int:
+    multiprocessing.freeze_support()
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] == "--internal-run-any4lerobot":
+        return run_any4lerobot_cli(args[1:])
+    if args and args[0] == "--internal-run-conversion":
+        return _run_internal_conversion_cli(args[1:])
+    if args and args[0] == "--internal-run-worker-shard":
+        return run_worker_shard_cli(args[1:])
+    if args and args[0] == "--internal-run-rosbag-health":
+        return _run_internal_rosbag_health_cli(args[1:])
+    if args and args[0] == "--internal-run-any4-health":
+        return _run_internal_any4_health_cli(args[1:])
+    if args and args[0] == "--internal-build-info":
+        return _run_internal_build_info_cli(args[1:])
+    _ensure_flet()
     ft.app(target=main)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_cli_entry())

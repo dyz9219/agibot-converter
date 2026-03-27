@@ -407,3 +407,555 @@ Windows 卡住不是单一业务代码问题，而是：
 
 - 如果通过，才能正式确认“缩包后 Linux 包仍可正常使用，且当前功能未被破坏”；
 - 如果仍失败，剩下的就会是更接近真实运行依赖的问题，而不是 smoke test 本身的误判。
+
+## 同日补充五：AgiBot 转 LeRobot 核心代码链路梳理
+
+### 问题背景
+
+需要快速定位仓库内 “AgiBot 转 LeRobot” 的核心实现位置，明确：
+
+- 预检入口在哪里；
+- 任务编排在哪里；
+- 原始 AgiBot 包如何适配到 any4 结构；
+- 最终如何调用 any4lerobot 并回写 LeRobot 产物。
+
+### 根因分析
+
+此前仓库文件较多，入口既有 UI、也有后端编排、适配层和 any4 桥接层。如果只看 `main.py` 或打包脚本，容易误判“核心转换逻辑”所在位置。
+
+本轮梳理后确认，AgiBot 转 LeRobot 的主链路并不在 UI，而是在以下顺序中：
+
+1. `src/data_converter/precheck.py`
+   - 负责输入发现、运行时依赖校验、源数据类型识别、任务构建与输出目录冲突检查。
+2. `src/data_converter/backend.py`
+   - 负责执行计划调度、并发策略、任务状态流转，以及把单任务派发到 LeRobot runner。
+3. `src/data_converter/adapters/raw_to_any4.py`
+   - 当输入不是标准 any4 结构，而是 AgiBot 原始包（如 `aligned_joints.h5`、`state.json`、`*.mp4`）时，负责适配成最小 any4 数据集结构。
+4. `src/data_converter/converters/lerobot_runner.py`
+   - 负责单个任务的真实执行，包括解包、短路径 staging、适配、运行 any4lerobot、版本后处理、parquet/video/metadata 修复与最终校验。
+5. `src/data_converter/any4lerobot_bridge.py`
+   - 负责把仓库内的执行参数桥接到 `agibot2lerobot.agibot_h5`，并做运行时 patch，例如动态视频键与临时视频目录处理。
+
+### 改动方案
+
+本轮未修改业务代码，仅完成源码定位与链路确认，提炼出以下核心入口：
+
+- `precheck.py:16` `run_precheck`
+- `backend.py:36` `ConversionBackend`
+- `backend.py:40` `ConversionBackend.run`
+- `backend.py:141` `ConversionBackend._run_task`
+- `raw_to_any4.py:26` `detect_source_kind`
+- `raw_to_any4.py:34` `prepare_any4_source`
+- `raw_to_any4.py:114` `_build_min_any4_dataset`
+- `lerobot_runner.py:79` `run_lerobot_task`
+- `lerobot_runner.py:210` `_build_any4lerobot_args`
+- `lerobot_runner.py:316` `_convert_generated_output_to_target_version`
+- `any4lerobot_bridge.py:26` `preload_any4_runtime`
+- `any4lerobot_bridge.py:41` `run_any4lerobot_cli_result`
+- `any4lerobot_bridge.py:154` `_patch_any4_image_config`
+
+### 量化结果
+
+- 已确认 5 个核心模块、12 个关键入口/函数位置。
+- 已明确主执行链路为：
+  `run_precheck -> ConversionBackend.run -> run_lerobot_task -> prepare_any4_source/run_any4lerobot_cli_result -> 后处理与校验`
+
+### 验证方式
+
+本轮执行的主要定位命令：
+
+- `Get-ChildItem -Recurse -File src\data_converter`
+- `Get-Content src\data_converter\backend.py -TotalCount 260`
+- `Get-Content src\data_converter\precheck.py -TotalCount 260`
+- `Get-Content src\data_converter\converters\lerobot_runner.py -TotalCount 320`
+- `Get-Content src\data_converter\adapters\raw_to_any4.py -TotalCount 320`
+- `Get-Content src\data_converter\any4lerobot_bridge.py -TotalCount 260`
+- `Select-String` 定位关键函数行号
+
+结果：
+
+- 所有目标文件可正常读取；
+- 已能稳定定位 AgiBot 转 LeRobot 的核心实现，不依赖 UI 层猜测。
+
+### 当前结论与下一步建议
+
+当前可以明确：
+
+- 如果要看 “AgiBot 转 LeRobot 真正做转换” 的代码，优先看 `lerobot_runner.py`；
+- 如果要看 “为什么某个输入能/不能转”，优先看 `precheck.py`；
+- 如果要看 “原始包怎么被包装成 any4”，优先看 `raw_to_any4.py`；
+- 如果要看 “最终怎么调用 any4 上游”，优先看 `any4lerobot_bridge.py`。
+
+下一步若需要继续深入，建议按以下顺序看：
+
+1. `run_precheck`
+2. `ConversionBackend.run`
+3. `run_lerobot_task`
+4. `prepare_any4_source`
+5. `run_any4lerobot_cli_result`
+
+## 同日补充六：AgiBot 转 LeRobot 对 16 维 joint 与左右手拆分字段的兼容性判断
+
+### 问题背景
+
+需要确认当前转换器是否兼容两类原始 AgiBot 数据：
+
+- 旧结构：16 维数据全部位于 `joint`；
+- 新结构：原本 joint 中的两个关键维度被拆出，改为独立的 `right` / `left` 字段。
+
+### 根因分析
+
+本轮检查的核心对象是 LeRobot 转换链路中的原始包适配层 `src/data_converter/adapters/raw_to_any4.py`。
+
+结论如下：
+
+1. 当前适配器显式支持的核心键是：
+   - `state/joint/current_value` -> 目标 16 维
+   - `state/joint/position` -> 目标 16 维
+   - `action/joint/position` -> 目标 16 维
+   - `state/effector/position` -> 目标 2 维
+   - `action/effector/position` -> 目标 2 维
+2. 当输入存在 16 维 `joint.position` 时：
+   - 适配器会直接保留 16 维 joint；
+   - 同时将 `joint[:, 14:16]` 派生为 `effector/position`。
+3. 当输入只有 14 维 joint，且存在显式 `effector/position` 时：
+   - 适配器会把 joint 补齐到 16 维目标结构；
+   - 同时保留原始 `effector/position`。
+4. 当前 `raw_to_any4.py` 中没有直接读取独立 `left` / `right` / `gripper` 原始键的逻辑。
+   - 代码检索 `left|right|gripper` 在该文件中无命中。
+
+因此，当前转换器对 “拆成 left/right 独立字段” 的兼容性不是自动成立的，是否兼容取决于新数据是否仍同步提供旧适配器可识别的 `joint` 或 `effector` 键。
+
+### 改动方案
+
+本轮未修改代码，仅完成兼容性核查与证据确认。
+
+### 量化结果
+
+- 定位关键实现函数：
+  - `raw_to_any4.py:208` `_build_proprio_stats`
+  - `raw_to_any4.py:304` `_normalize_raw_array`
+  - `raw_to_any4.py:335` `_derive_effector_from_joint`
+- 运行针对性回归测试：
+  - `python -m pytest -q test\python\test_raw_to_any4_adapter.py test\python\test_raw_video_mapping.py`
+  - 结果：`10 passed in 1.95s`
+
+### 验证方式
+
+主要证据：
+
+1. 16 维 joint 兼容测试通过：
+   - `test_raw_to_any4_adapter.py:20`
+   - 断言 `state/joint/position`、`action/joint/position` 原样保留；
+   - 断言 `state/effector/position`、`action/effector/position` 等于 `joint[:, 14:16]`。
+2. 14 维 joint + 显式 effector 兼容测试通过：
+   - `test_raw_video_mapping.py:46`
+   - 断言 joint 前 14 维保留；
+   - 断言 effector 使用显式输入值。
+3. 16 维 joint 优先于原始 effector 的兼容测试通过：
+   - `test_raw_video_mapping.py:84`
+   - 断言 effector 最终取自 `joint[:, 14:16]`，而不是外部 bogus effector。
+4. 对 `raw_to_any4.py` 搜索 `left|right|gripper` 无结果，说明 LeRobot 原始适配链路当前没有直接消费新式 left/right 独立字段。
+
+### 当前结论与下一步建议
+
+当前可以明确：
+
+- 兼容：
+  - 旧 16 维全在 joint 的数据；
+  - 14 维 joint + 2 维 `effector/position` 的数据。
+- 暂不证实兼容：
+  - 如果新数据把两个关键维度从 joint 拆走后，只保留独立 `left` / `right` 字段，而不再提供可识别的 `effector/position`，当前转换器大概率不兼容。
+
+建议下一步：
+
+1. 抽一个新格式样本，确认 H5 的真实键名；
+2. 若键名确为类似 `state/left`、`state/right`、`action/left`、`action/right`，则需要在 `raw_to_any4.py` 中新增映射逻辑，把它们组装成 2 维 `effector/position`，必要时再补回 16 维 joint；
+3. 增加对应回归测试后再正式放行新格式数据。
+
+## 同日补充七：AgiBot 转 LeRobot 中 effector 左右手处理方式核查
+
+### 问题背景
+
+需要确认当前 AgiBot 转 LeRobot 核心代码中：
+
+- 是否存在显式 `left_effector` / `right_effector` 处理；
+- `effector` 到目标结构的映射是写死索引，还是按字段名灵活适配。
+
+### 根因分析
+
+本轮重点检查：
+
+- `src/data_converter/adapters/raw_to_any4.py`
+- `src/data_converter/rosbag/source_reader.py`
+
+确认结果：
+
+1. LeRobot 原始适配链路只处理统一的二维键：
+   - `state/effector/position`
+   - `action/effector/position`
+2. 在 LeRobot 链路中，没有发现：
+   - `left_effector`
+   - `right_effector`
+   - 基于左右手键名的动态拼接逻辑
+3. LeRobot 链路里从 `joint` 派生 `effector` 的逻辑是写死的：
+   - `_derive_effector_from_joint()` 直接返回 `joint_arr[:, 14:16]`
+4. LeRobot 链路对 effector 的目标形状也写死为 `(2,)`：
+   - `_build_proprio_stats()` 中 `state_shapes` / `action_shapes` 都把 `effector/position` 定义为二维。
+5. Rosbag 链路存在额外的左右手别名逻辑，但这是另一条路径，不属于 LeRobot 核心转换：
+   - `_read_effector_array()` 会尝试用 `left_gripper_joint1` / `right_gripper_joint1` 从 joint 中抽取二维 effector；
+   - `_augment_joint_state_with_effector_aliases()` 会补充 `left_gripper` / `right_gripper` alias。
+
+### 改动方案
+
+本轮未修改代码，仅完成核心源码核查。
+
+### 量化结果
+
+关键证据位置：
+
+- `raw_to_any4.py:210` / `221`
+  - `effector/position` 目标形状定义为 `(2,)`
+- `raw_to_any4.py:272` / `314`
+  - 只识别 `state/effector/position` 与 `action/effector/position`
+- `raw_to_any4.py:345`
+  - 从 joint 派生 effector 使用固定切片 `joint_arr[:, 14:16]`
+- `rosbag/source_reader.py:137-140`
+  - Rosbag 路径按 `left_gripper_joint1` / `right_gripper_joint1` 查索引
+- `rosbag/source_reader.py:156-161`
+  - Rosbag 路径补 `left_gripper` / `right_gripper` alias
+
+### 验证方式
+
+本轮执行：
+
+- 全仓检索 `left_effector|right_effector|effector/position|left_gripper|right_gripper|14:16`
+- 读取 `raw_to_any4.py` effector 核心逻辑
+- 读取 `rosbag/source_reader.py` 对照左右手 alias 逻辑
+
+结果：
+
+- LeRobot 路径未发现 `left_effector` / `right_effector` 支持；
+- LeRobot 路径确认存在固定切片 `14:16`；
+- Rosbag 路径存在左右手别名逻辑，但不能代表 LeRobot 路径已兼容。
+
+### 当前结论与下一步建议
+
+当前可明确：
+
+- AgiBot 转 LeRobot 的 effector 处理是偏写死的，不是按左右手字段名灵活适配；
+- 当前假设是：目标 effector 永远是 2 维，且在 16 维 joint 场景下，这两维固定来自索引 14 和 15；
+- 如果后续原始数据改成新的显式左右手 effector 字段，需要在 `raw_to_any4.py` 新增字段映射，不能指望现有逻辑自动兼容。
+
+## 同日补充八：对 test/agibot_test 两个 H5 样本进行 v2.1 实转验证
+
+### 问题背景
+
+需要用当前仓库中的现有 AgiBot 转 LeRobot 代码，实际验证 `test/agibot_test` 下两个 H5 样本的转换表现，并把结果直接放到该目录下，便于对比差异。
+
+输入样本：
+
+- `test/agibot_test/aligned_joints(1).h5`
+- `test/agibot_test/aligned_joints(5)(1).h5`
+
+### 根因分析
+
+先对输入做结构核查后发现：
+
+- 该目录下仅有两个 `.h5` 文件；
+- 不包含现有正式预检要求的 `state.json`；
+- 也不包含视频文件。
+
+直接对 `test/agibot_test` 跑现有 LeRobot v2.1 预检时，结果为：
+
+- `ok=False`
+- 全局错误：
+  `当前输入既不满足 any4lerobot AgiBotWorld 结构（task_info/*.json + observations/*），也不是可适配的原始包结构（aligned_joints.h5 + state.json）。`
+
+因此，若不补足最小原始包结构，现有正式入口无法直接转换这两个 H5。
+
+为测试“现有代码”在最小可接受输入下的真实表现，本轮在同目录下为每个 H5 创建了最小包装目录：
+
+- 复制原始 H5 为 `aligned_joints.h5`
+- 补一个最小 `state.json`
+- 生成最小 `head.mp4` / `hand_left.mp4` / `hand_right.mp4`
+
+然后使用仓库现有 `ConversionBackend` + `ConversionOptions(target=lerobot, lerobot_version=v2.1)` 正式跑转换。
+
+### 改动方案
+
+本轮未修改源码，仅在 `test/agibot_test` 下新增最小包装输入目录与实际转换输出目录。
+
+新增包装输入：
+
+- `test/agibot_test/aligned_joints(1)__rawpkg`
+- `test/agibot_test/aligned_joints(5)(1)__rawpkg`
+
+新增转换输出：
+
+- `test/agibot_test/aligned_joints(1)__rawpkg__lerobot_v21`
+- `test/agibot_test/aligned_joints(5)(1)__rawpkg__lerobot_v21`
+
+### 量化结果
+
+#### 1. 输入 H5 结构差异
+
+`aligned_joints(1).h5`：
+
+- `state/joint/position`: `(2352, 16)`
+- `action/joint/position`: `(2352, 16)`
+- `state/effector/position`: `(0,)`
+- `action/effector/position`: `(0,)`
+
+`aligned_joints(5)(1).h5`：
+
+- `state/joint/position`: `(624, 14)`
+- `action/joint/position`: `(624, 14)`
+- `state/left_effector/position`: `(624, 1)`
+- `state/right_effector/position`: `(624, 1)`
+- `action/left_effector/position`: `(624, 1)`
+- `action/right_effector/position`: `(624, 1)`
+- 不存在标准 `state/effector/position` / `action/effector/position`
+
+#### 2. 实际 v2.1 转换结果
+
+样本一：`aligned_joints(1)__rawpkg__lerobot_v21`
+
+- 转换成功：`success=1 failed=0`
+- 输出 parquet 行数：`2352`
+- `observation.state` 形状：`(2352, 16)`
+- `actions` 形状：`(2352, 16)`
+- 最后两维前 3 帧示例：
+  - `observation.state[:, -2:]` -> `[[34.95, 34.92], ...]`
+  - `actions[:, -2:]` -> `[[34.95, 34.92], ...]`
+- 结论：最后两维被保留下来，符合“16 维 joint -> 末两维作为 effector” 的当前实现假设。
+
+样本二：`aligned_joints(5)(1)__rawpkg__lerobot_v21`
+
+- 转换成功：`success=1 failed=0`
+- 输出 parquet 行数：`624`
+- `observation.state` 形状：`(624, 16)`
+- `actions` 形状：`(624, 16)`
+- 最后两维前 3 帧示例：
+  - `observation.state[:, -2:]` -> `[[0.0, 0.0], ...]`
+  - `actions[:, -2:]` -> `[[0.0, 0.0], ...]`
+- 结论：最后两维被补零，没有从 `left_effector/right_effector` 迁移到 v2.1 输出状态向量中。
+
+### 验证方式
+
+本轮执行的关键步骤与命令：
+
+1. 目录检查：
+   - `Get-ChildItem -Recurse test\agibot_test`
+2. H5 结构检查：
+   - Python + `h5py` 遍历两个样本所有 dataset
+3. 正式预检验证：
+   - Python 调 `ConversionBackend().precheck(...)`
+   - 确认 H5-only 输入被现有入口拒绝
+4. 生成最小包装输入目录：
+   - Python 创建 `state.json` 与最小 mp4
+5. 实际转换：
+   - Python 调 `ConversionBackend().run(...)`
+6. 结果比对：
+   - 读取 v2.1 parquet 中 `observation.state` 与 `actions`
+   - 对比最后两维是否为零
+
+### 当前结论与下一步建议
+
+当前可以明确：
+
+- 现有代码对 `16 维 joint` 样本兼容；
+- 对 `14 维 joint + left_effector/right_effector` 样本，虽然整体 v2.1 转换可成功完成，但左右手 effector 信息没有进入输出状态向量，最终被补零；
+- 这说明当前 LeRobot 适配链路并不会自动把 `left_effector/right_effector` 合并成标准二维 `effector/position`。
+
+建议下一步：
+
+1. 在 `raw_to_any4.py` 中新增对：
+   - `state/left_effector/position` + `state/right_effector/position`
+   - `action/left_effector/position` + `action/right_effector/position`
+   的识别与拼接；
+2. 将其组装成标准二维 `state/effector/position` / `action/effector/position`；
+3. 增加一个针对该新结构的回归测试，再重新跑这两个样本做 A/B 对比。
+
+## 同日补充九：修复 left/right effector 到 LeRobot v2.1 的兼容性问题
+
+### 问题背景
+
+用户确认新格式样本并非标准 `state/effector/position` / `action/effector/position`，而是：
+
+- `state/left_effector/position`
+- `state/right_effector/position`
+- `action/left_effector/position`
+- `action/right_effector/position`
+
+此前实际验证表明：
+
+- 旧 16 维 joint 样本转换正常；
+- 新 split-effector 样本虽然能完成 v2.1 转换，但输出 `observation.state` / `actions` 最后两维被补零，没有保留左右手 effector 信息。
+
+### 根因分析
+
+问题集中在 `src/data_converter/adapters/raw_to_any4.py`：
+
+1. 适配器只识别统一键：
+   - `state/effector/position`
+   - `action/effector/position`
+2. 从 joint 派生 effector 的逻辑写死为：
+   - `joint_arr[:, 14:16]`
+3. 当 raw 数据只有：
+   - `left_effector/position`
+   - `right_effector/position`
+   而缺少统一 `effector/position` 时，适配器没有重建逻辑；
+4. 当 joint 只有 14 维时，适配器只是零填充到 16 维，没有把 split effector 补到 joint 尾部。
+
+因此，新结构数据在 LeRobot v2.1 输出中丢失了关键的左右手 effector 值。
+
+### 改动方案
+
+本轮修改了 `raw_to_any4.py`，核心策略如下：
+
+1. 新增 split-effector 识别：
+   - 从 `left_effector/position` 和 `right_effector/position` 组装标准二维 effector；
+2. 保持原有优先级：
+   - 若存在可用 16 维 joint，则仍优先从 `joint[:, 14:16]` 派生 effector；
+   - 否则尝试标准 `effector/position`；
+   - 再否则尝试 split left/right effector；
+3. 对 14 维 joint 场景：
+   - 在补齐到 16 维时，把解析出的二维 effector 写入 joint 的最后两维，而不是继续补零。
+
+同时新增回归测试，覆盖：
+
+- `14d joint + left/right effector -> 16d joint tail + 2d effector`
+
+### 量化结果
+
+#### 1. 回归测试
+
+执行：
+
+- `python -m pytest -q test\python\test_raw_to_any4_adapter.py test\python\test_raw_video_mapping.py`
+
+结果：
+
+- `11 passed in 0.60s`
+
+其中新增失败用例先红后绿，验证修复生效。
+
+#### 2. 用户样本复跑
+
+重新生成输出：
+
+- `test/agibot_test/aligned_joints(1)__rawpkg__lerobot_v21`
+- `test/agibot_test/aligned_joints(5)(1)__rawpkg__lerobot_v21`
+
+样本一（16d joint）：
+
+- `observation.state[:, -2:]` 非零，保持原行为不变。
+
+样本二（14d joint + split effector）：
+
+- 修复后 `observation.state[:, -2:]` 非零；
+- 修复后 `actions[:, -2:]` 非零；
+- 与源 H5 中 `left/right_effector/position` 直接对比：
+  - `state match = True`
+  - `action match = True`
+
+即：输出最后两维已正确等于源数据的左右手 effector 值，不再是零填充。
+
+### 验证方式
+
+本轮验证步骤：
+
+1. 新增 split-effector 回归测试，并确认初始失败；
+2. 修改 `raw_to_any4.py` 后回跑单测，确认转绿；
+3. 跑完整 adapter 相关测试集；
+4. 删除旧的 `__lerobot_v21` 目录后，重新对两个样本做 v2.1 转换；
+5. 读取生成 parquet 中 `observation.state` / `actions` 最后两维；
+6. 直接对比第二个源样本 H5 中 left/right effector 与输出向量尾部，确认逐值一致。
+
+### 当前结论与下一步建议
+
+当前可以明确：
+
+- 现有仓库已修复 `left_effector/right_effector` 到 LeRobot v2.1 的兼容问题；
+- 旧 16 维 joint 行为未回退；
+- 新 split-effector 样本现在会把左右手 effector 正确写入输出 16 维状态向量尾部。
+
+建议下一步：
+
+1. 如需长期保留这两个样本作为验收基准，可把当前包装输入与输出目录保留在 `test/agibot_test`；
+2. 若后续还会出现其他命名变体（如 `left_gripper` / `right_gripper`），可以继续在同一适配层补命名别名映射。
+## 2026-03-27 GitHub 推送与 Actions 打包触发
+
+### 问题背景
+
+用户要求将当前仓库代码上传到 GitHub，并通过仓库中的 GitHub Actions 自动执行打包。
+
+### 根因分析
+
+检查后确认：
+
+1. 仓库已配置 `origin = https://github.com/dyz9219/agibot-converter.git`；
+2. 已存在 `.github/workflows/build.yml`，且在 `push main`、`push master`、`tag v*` 与手动触发时会执行多平台构建；
+3. 当前工作区除源码改动外，还混有本地缓存、下载日志、临时输出目录等不应入库的产物，需要先收敛提交范围；
+4. 根目录已有若干旧测试文件删除记录，同时 `test/python/` 下已有对应正式测试文件，符合仓库规范。
+
+### 改动方案
+
+本轮处理如下：
+
+1. 先执行全量测试，确认当前代码可提交；
+2. 更新 `.gitignore`，补充忽略：
+   - `.hf-local/`
+   - `out_*/`
+   - `*.html`
+   - `*.json`
+   - `*.zip`
+3. 提交时排除本地配置与一次性调试/下载产物，只提交源码、脚本、测试迁移及工作记录；
+4. 推送到 `origin/main`，让 GitHub Actions 按现有 `build.yml` 自动启动打包。
+
+### 量化结果
+
+#### 1. 本地验证
+
+执行：
+
+- `pytest -q`
+
+结果：
+
+- `56 passed, 4 skipped in 75.50s`
+
+#### 2. Actions 触发条件确认
+
+检查 `.github/workflows/build.yml`，确认：
+
+- `push` 到 `main` 会自动触发；
+- 会执行：
+  - `build-windows`
+  - `build-linux-x64`
+  - `build-linux-arm64`
+- 构建完成后会上传对应 artifact。
+
+### 验证方式
+
+本轮验证步骤：
+
+1. 检查 `git remote -v`，确认 GitHub 远程存在；
+2. 检查 `.github/workflows/build.yml`，确认推送触发条件；
+3. 执行 `pytest -q`，确认提交前测试通过；
+4. 收敛 `.gitignore` 与提交范围，避免上传本地缓存和调试文件；
+5. 推送后检查远端是否成功触发 Actions。
+
+### 当前结论与下一步建议
+
+当前结论：
+
+- 仓库已具备“推送即自动打包”的 GitHub Actions 配置；
+- 当前代码在本地测试通过，可以安全推送；
+- 推送后应以 GitHub Actions 产物和日志作为最终打包验收依据。
+
+建议下一步：
+
+1. 若某个平台构建失败，优先查看对应 job 日志中的依赖安装与 PyInstaller 收集阶段；
+2. 若需要对外发布，待 Actions artifact 生成后再做一次下载 smoke 验证。

@@ -21,8 +21,27 @@ def load_depths(root_dir: str, camera_name: str):
 
 def load_local_dataset(
     episode_id: int, src_path: str, task_id: int, save_depth: bool, AgiBotWorld_CONFIG: dict
-) -> tuple[list, dict]:
+) -> tuple[int, list[dict[str, np.ndarray]], dict[str, Path]]:
     """Load local dataset and return a dict with observations and actions"""
+    episode_id, columns, videos = load_local_episode_columns(
+        episode_id,
+        src_path=src_path,
+        task_id=task_id,
+        save_depth=save_depth,
+        AgiBotWorld_CONFIG=AgiBotWorld_CONFIG,
+    )
+    if not columns:
+        return episode_id, [], videos
+
+    num_frames = len(next(iter(columns.values())))
+    frames = [{key: value[i] for key, value in columns.items()} for i in range(num_frames)]
+    return episode_id, frames, videos
+
+
+def load_local_episode_columns(
+    episode_id: int, src_path: str, task_id: int, save_depth: bool, AgiBotWorld_CONFIG: dict
+) -> tuple[int, dict[str, np.ndarray], dict[str, Path]]:
+    """Load local dataset and return columnar arrays keyed by LeRobot feature name."""
     ob_dir = Path(src_path) / f"observations/{task_id}/{episode_id}"
     proprio_dir = Path(src_path) / f"proprio_stats/{task_id}/{episode_id}"
 
@@ -52,38 +71,27 @@ def load_local_dataset(
                 action[action_key] = new_action_value
             elif len(action_value) > num_frames:
                 print("corrupt data, skipping")
-                return episode_id, [], {"dummy_video": Path("/path/to/no_exist")}
+                return episode_id, {}, {"dummy_video": Path("/path/to/no_exist")}
 
     if save_depth:
         depth_imgs = load_depths(ob_dir / "depth", "head_depth")
         assert num_frames == len(depth_imgs), "Number of images and states are not equal"
 
-    state_key_prefix_len = len("observation.states.")
-    action_key_prefix_len = len("actions.")
-    frames = [
-        {
-            **({"observation.images.head_depth": depth_imgs[i]} if save_depth else {}),
-            **{
-                key: value[i]
-                if value.size
-                else np.zeros(
-                    AgiBotWorld_CONFIG["states"][key[state_key_prefix_len:]]["shape"],
-                    dtype=AgiBotWorld_CONFIG["states"][key[state_key_prefix_len:]]["dtype"],
-                )
-                for key, value in state.items()
-            },
-            **{
-                key: value[i]
-                if value.size
-                else np.zeros(
-                    AgiBotWorld_CONFIG["actions"][key[action_key_prefix_len:]]["shape"],
-                    dtype=AgiBotWorld_CONFIG["actions"][key[action_key_prefix_len:]]["dtype"],
-                )
-                for key, value in action.items()
-            },
-        }
-        for i in range(num_frames)
-    ]
+    columns: dict[str, np.ndarray] = {}
+    for key, value in state.items():
+        state_key = key.removeprefix("observation.states.")
+        columns[key] = value if value.size else np.zeros(
+            (num_frames, *AgiBotWorld_CONFIG["states"][state_key]["shape"]),
+            dtype=AgiBotWorld_CONFIG["states"][state_key]["dtype"],
+        )
+    for key, value in action.items():
+        action_key = key.removeprefix("actions.")
+        columns[key] = value if value.size else np.zeros(
+            (num_frames, *AgiBotWorld_CONFIG["actions"][action_key]["shape"]),
+            dtype=AgiBotWorld_CONFIG["actions"][action_key]["dtype"],
+        )
+    if save_depth:
+        columns["observation.images.head_depth"] = np.stack(depth_imgs, axis=0)
 
     videos = {
         f"observation.images.{key}": ob_dir / "videos" / f"{key}_color.mp4"
@@ -92,4 +100,4 @@ def load_local_dataset(
         for key in AgiBotWorld_CONFIG["images"]
         if "depth" not in key
     }
-    return episode_id, frames, videos
+    return episode_id, columns, videos

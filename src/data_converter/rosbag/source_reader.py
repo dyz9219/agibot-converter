@@ -40,7 +40,14 @@ def load_agibot_dataset(source_dir: Path, fps_fallback: float = 30.0) -> AgibotD
 
     state_doc = json.loads(state_path.read_text(encoding="utf-8"))
     fps = float(state_doc.get("fps") or fps_fallback)
-    joint_names = _resolve_joint_names(state_doc, joint_count)
+    raw_joint_names = _resolve_joint_names(state_doc, joint_count)
+    joint_names, joint_position, joint_velocity, joint_effort = _augment_joint_state_with_effector_aliases(
+        raw_joint_names,
+        joint_position,
+        joint_velocity,
+        joint_effort,
+        _read_effector_array(root_dir / "aligned_joints.h5", frame_count, raw_joint_names, joint_position),
+    )
     camera_videos = _resolve_camera_videos(root_dir)
 
     return AgibotDataset(
@@ -112,6 +119,58 @@ def _optional_1d(h5f: h5py.File, key: str, frame_count: int, fps_fallback: float
         return arr[:frame_count]
     pad = np.arange(arr.size, frame_count, dtype=np.float64) / max(fps_fallback, 1.0)
     return np.concatenate([arr, pad], axis=0)
+
+
+def _read_effector_array(
+    h5_path: Path,
+    frame_count: int,
+    joint_names: list[str],
+    joint_position: np.ndarray,
+) -> np.ndarray:
+    with h5py.File(h5_path, "r") as h5f:
+        if "state/effector/position" in h5f:
+            arr = np.asarray(h5f["state/effector/position"], dtype=np.float64)
+            if arr.ndim == 2 and arr.shape == (frame_count, 2):
+                return arr
+        if joint_position.ndim == 2 and joint_position.shape[0] == frame_count:
+            name_to_index = {name: idx for idx, name in enumerate(joint_names)}
+            left_idx = name_to_index.get("left_gripper_joint1")
+            right_idx = name_to_index.get("right_gripper_joint1")
+            if left_idx is not None and right_idx is not None:
+                return np.stack([joint_position[:, left_idx], joint_position[:, right_idx]], axis=1)
+    return np.zeros((frame_count, 2), dtype=np.float64)
+
+
+def _augment_joint_state_with_effector_aliases(
+    joint_names: list[str],
+    joint_position: np.ndarray,
+    joint_velocity: np.ndarray,
+    joint_effort: np.ndarray,
+    effector_position: np.ndarray,
+) -> tuple[list[str], np.ndarray, np.ndarray, np.ndarray]:
+    normalized_names = [_normalize_joint_name(name) for name in joint_names]
+    if effector_position.ndim != 2 or effector_position.shape[1] != 2:
+        return normalized_names, joint_position, joint_velocity, joint_effort
+
+    existing = set(normalized_names)
+    alias_names = [name for name in ["left_gripper", "right_gripper"] if name not in existing]
+    if not alias_names:
+        return normalized_names, joint_position, joint_velocity, joint_effort
+
+    alias_index = {"left_gripper": 0, "right_gripper": 1}
+    alias_position = np.stack([effector_position[:, alias_index[name]] for name in alias_names], axis=1)
+    alias_velocity = np.zeros((joint_velocity.shape[0], len(alias_names)), dtype=joint_velocity.dtype)
+    alias_effort = np.zeros((joint_effort.shape[0], len(alias_names)), dtype=joint_effort.dtype)
+    return (
+        [*normalized_names, *alias_names],
+        np.concatenate([joint_position, alias_position], axis=1),
+        np.concatenate([joint_velocity, alias_velocity], axis=1),
+        np.concatenate([joint_effort, alias_effort], axis=1),
+    )
+
+
+def _normalize_joint_name(name: str) -> str:
+    return __import__("re").sub(r"^idx\d+_", "", str(name))
 
 
 def _resolve_joint_names(state_doc: dict, joint_count: int) -> list[str]:

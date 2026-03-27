@@ -33,6 +33,7 @@ def _candidate_roots() -> list[Path]:
 
     here = Path(__file__).resolve()
     roots.append(here.parents[2] / "third_party" / "any4lerobot")
+    roots.append(here.parents[2] / "any4lerobot")
     roots.append(here.parents[3] / "any4lerobot")
 
     cwd = Path.cwd().resolve()

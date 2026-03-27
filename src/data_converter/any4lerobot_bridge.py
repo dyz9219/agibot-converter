@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import copy
 import importlib
+import os
 import shutil
 import sys
 import traceback
@@ -22,6 +23,21 @@ class Any4RunResult:
     stderr: str = ""
 
 
+def preload_any4_runtime() -> None:
+    root = find_any4lerobot_root()
+    if root is not None:
+        root_str = str(root)
+        if root_str not in sys.path:
+            sys.path.insert(0, root_str)
+        agibot2lerobot_dir = root / "agibot2lerobot"
+        if agibot2lerobot_dir.exists():
+            agibot2lerobot_str = str(agibot2lerobot_dir)
+            if agibot2lerobot_str not in sys.path:
+                sys.path.insert(0, agibot2lerobot_str)
+    agibot_h5 = importlib.import_module("agibot2lerobot.agibot_h5")
+    _install_any4_runtime_patches(agibot_h5)
+
+
 def run_any4lerobot_cli_result(argv: list[str]) -> Any4RunResult:
     out_buf = StringIO()
     err_buf = StringIO()
@@ -36,16 +52,9 @@ def run_any4lerobot_cli_result(argv: list[str]) -> Any4RunResult:
             parts.append(f"STDERR:\n{stderr}")
         return "\n\n".join(parts)
 
-    root = find_any4lerobot_root()
-    if root is not None:
-        sys.path.insert(0, str(root))
-        # Also add agibot2lerobot directory for direct imports like agibot_utils
-        agibot2lerobot_dir = root / "agibot2lerobot"
-        if agibot2lerobot_dir.exists():
-            sys.path.insert(0, str(agibot2lerobot_dir))
-
     try:
         with redirect_stdout(out_buf), redirect_stderr(err_buf):
+            preload_any4_runtime()
             agibot_h5 = importlib.import_module("agibot2lerobot.agibot_h5")
     except Exception as exc:
         detail = _combine(f"加载 any4lerobot 失败: {exc}\n{traceback.format_exc()}")
@@ -69,7 +78,6 @@ def run_any4lerobot_cli_result(argv: list[str]) -> Any4RunResult:
 
     try:
         with redirect_stdout(out_buf), redirect_stderr(err_buf):
-            _install_any4_runtime_patches(agibot_h5)
             with _patch_any4_image_config(agibot_h5, args.src_path, args.eef_type, args.save_depth):
                 agibot_h5.main(**vars(args))
         return Any4RunResult(returncode=0, stdout=out_buf.getvalue(), stderr=err_buf.getvalue())
@@ -82,10 +90,42 @@ def run_any4lerobot_cli_result(argv: list[str]) -> Any4RunResult:
             stdout=out_buf.getvalue(),
             stderr=err_buf.getvalue(),
         )
+    finally:
+        _cleanup_any4_temp_video_dir()
 
 
 def run_any4lerobot_cli(argv: list[str]) -> int:
     return run_any4lerobot_cli_result(argv).returncode
+
+
+def _cleanup_any4_temp_video_dir() -> None:
+    temp_dir = _any4_temp_video_dir()
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    temp_root = temp_dir.parent
+    if temp_root.exists():
+        for child in list(temp_root.iterdir()):
+            try:
+                if child.is_dir() and not any(child.iterdir()):
+                    child.rmdir()
+            except OSError:
+                continue
+
+    stop_at = Path.cwd()
+    current = temp_root
+    while current.exists() and current != stop_at:
+        try:
+            if any(current.iterdir()):
+                break
+            current.rmdir()
+        except OSError:
+            break
+        current = current.parent
+
+
+def _any4_temp_video_dir() -> Path:
+    return Path.cwd() / ".tmp-any4-video" / f"pid-{os.getpid()}"
 
 
 def _install_any4_runtime_patches(agibot_h5_module) -> None:
@@ -96,7 +136,7 @@ def _install_any4_runtime_patches(agibot_h5_module) -> None:
         return
 
     def _encode_temporary_episode_video(self, video_key: str, episode_index: int) -> Path:
-        temp_base = Path.cwd() / ".tmp-any4-video"
+        temp_base = _any4_temp_video_dir()
         temp_base.mkdir(parents=True, exist_ok=True)
         temp_dir = temp_base / f"{video_key}_{episode_index:03d}"
         if temp_dir.exists():
