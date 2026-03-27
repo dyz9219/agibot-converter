@@ -236,9 +236,10 @@ def _probe_psutil_runtime(*, lightweight: bool) -> str:
         else:
             importlib.import_module("psutil")
             importlib.import_module(private_module)
-            if importlib.util.find_spec("ray.thirdparty_files.psutil") is not None:
+            ray_psutil_spec = _safe_find_spec("ray.thirdparty_files.psutil")
+            if ray_psutil_spec is not None:
                 importlib.import_module("ray.thirdparty_files.psutil")
-                if importlib.util.find_spec(ray_private_module) is not None:
+                if _safe_find_spec(ray_private_module) is not None:
                     importlib.import_module(ray_private_module)
         return "ok"
     except Exception as exc:
@@ -273,6 +274,13 @@ def _platform_psutil_suffix() -> str:
         return "_psutil_osx"
     return "_psutil_posix"
 
+
+
+def _safe_find_spec(name: str):
+    try:
+        return importlib.util.find_spec(name)
+    except ModuleNotFoundError:
+        return None
 
 def _package_dir_from_spec(name: str) -> Path | None:
     spec = importlib.util.find_spec(name)

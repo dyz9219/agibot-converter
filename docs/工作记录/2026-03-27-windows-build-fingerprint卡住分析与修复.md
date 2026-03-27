@@ -959,3 +959,144 @@ Windows 卡住不是单一业务代码问题，而是：
 
 1. 若某个平台构建失败，优先查看对应 job 日志中的依赖安装与 PyInstaller 收集阶段；
 2. 若需要对外发布，待 Actions artifact 生成后再做一次下载 smoke 验证。
+## 2026-03-27 Linux any4 健康检查对缺失 ray 的最终修复
+
+### 问题背景
+
+用户在最新 GitHub Actions run `23638396726` 中发现：
+
+- `build-linux-x64` 失败；
+- 日志显示失败发生在 `Smoke test binary`；
+- 用户要求尽快修复，并避免继续在同一问题上来回误判。
+
+### 根因分析
+
+本轮直接使用已登录的 GitHub CLI 拉取失败 job 的完整日志，确认不是构建失败，而是打包后二进制运行健康检查失败。
+
+`build-linux-x64` 关键日志为：
+
+- `--internal-build-info` 通过；
+- `--internal-run-rosbag-health --bag-type MCAP` 通过；
+- `--internal-run-any4-health --version v3.0` 失败；
+- 失败诊断中包含：
+  - `ANY4_HEALTH_FAIL`
+  - `missing=psutil_runtime`
+  - `bundled_error=ModuleNotFoundError:No module named 'ray'`
+
+`build-linux-arm64` 拉取失败日志后，确认是完全相同的报错模式。
+
+因此可以明确：
+
+1. 失败不是 Linux x64 专属，而是两个 Linux job 共用的 bundled runtime 探针问题；
+2. 失败不是 `psutil` 真缺失，因为日志同时给出：
+   - `private_module=psutil._psutil_linux`
+   - `psutil_files=_psutil_linux.abi3.so`
+3. 真正的问题在 `src/data_converter/any4_health.py` 的 frozen 分支：
+   - 代码直接执行 `find_spec("ray.thirdparty_files.psutil")`
+   - 当顶层 `ray` 根本未打包时，这一步会抛 `ModuleNotFoundError: No module named 'ray'`
+   - 该异常被上层错误归类为 `psutil_runtime` 缺失
+
+换言之，本次 Linux CI 失败的本质是：
+
+- `ray` 在当前 Linux 打包产物中本来就是可选/未打入；
+- 但 any4 健康检查把“缺少顶层 ray 包”误判成 bundled runtime 不健康。
+
+### 改动方案
+
+本轮采用 TDD 方式修复：
+
+1. 先在 `test/python/test_any4_health.py` 新增回归测试；
+2. 构造 frozen 模式下：
+   - `psutil` 与 `psutil._psutil_linux` 可导入；
+   - `find_spec("ray.thirdparty_files.psutil")` 抛 `ModuleNotFoundError("No module named 'ray'")`
+3. 先确认测试失败，再做最小修复；
+4. 修复后补跑针对性测试和全量测试；
+5. 通过后再推送触发新一轮 Actions。
+
+### 实际修改
+
+修改文件：
+
+- `test/python/test_any4_health.py`
+- `src/data_converter/any4_health.py`
+
+具体修复：
+
+1. 新增回归测试：
+   - `test_frozen_psutil_probe_tolerates_missing_ray_package`
+2. 在 `any4_health.py` 中新增 `_safe_find_spec(name)`：
+   - 对 `importlib.util.find_spec(name)` 做 `ModuleNotFoundError` 保护；
+   - 缺父包时返回 `None`，而不是直接异常中断。
+3. 将 frozen 分支中的：
+   - `find_spec("ray.thirdparty_files.psutil")`
+   - `find_spec(ray_private_module)`
+   改为 `_safe_find_spec(...)`
+
+这样在 Linux bundled 包中若根本没有 `ray`：
+
+- 健康检查会把它当作“ray 未打包，因此无需继续检查其私有 psutil 扩展”；
+- 不会再把这个情况误报成 `psutil_runtime` 缺失。
+
+### 量化结果
+
+#### 1. TDD 红绿验证
+
+执行：
+
+- `pytest -q test/python/test_any4_health.py -k frozen_psutil_probe_tolerates_missing_ray_package`
+
+结果：
+
+- 修复前：失败，明确返回 `ModuleNotFoundError: No module named 'ray'`
+- 修复后：通过
+
+#### 2. 针对性测试
+
+执行：
+
+- `pytest -q test/python/test_any4_health.py`
+- `pytest -q test/python/test_main_entry.py`
+- `python -m py_compile src/data_converter/any4_health.py src/data_converter/main.py`
+
+结果：
+
+- `test_any4_health.py`: `5 passed`
+- `test_main_entry.py`: `2 passed`
+- `py_compile`: 通过
+
+#### 3. 全量回归
+
+执行：
+
+- `pytest -q`
+
+结果：
+
+- `57 passed, 4 skipped in 95.60s`
+
+### 验证方式
+
+本轮验证链路：
+
+1. 使用 `gh run view 23638396726 --job 68852796634 --log-failed` 拉取 `build-linux-x64` 完整失败日志；
+2. 使用 `gh run view 23638396726 --job 68852796626 --log-failed` 确认 `build-linux-arm64` 同根因；
+3. 新增 frozen 模式缺失 `ray` 的回归测试并先看红灯；
+4. 做最小修复后，看该测试转绿；
+5. 跑 `test_any4_health.py`、`test_main_entry.py` 与全量 `pytest -q`；
+6. 通过后再进入提交流程。
+
+### 当前结论与下一步建议
+
+当前结论：
+
+- 本次 Linux CI 失败根因已被精确定位为 any4 健康检查对缺失 `ray` 的误判；
+- 修复已用回归测试锁住，并通过全量测试验证；
+- 下一步应立即推送并观察新的 GitHub Actions run，重点确认：
+  - `build-linux-x64` smoke test 通过；
+  - `build-linux-arm64` smoke test 通过；
+  - Windows 构建不受影响。
+
+建议下一步：
+
+1. 若新 run 仍失败，优先继续抓完整 `--log-failed`，不再依赖网页摘要；
+2. 若 Linux 全绿，再考虑把 `gh run view --log-failed` 纳入固定排障流程，减少反复猜测。
