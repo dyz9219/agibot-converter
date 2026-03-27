@@ -1,0 +1,125 @@
+## 问题背景
+
+用户要求继续分析 GitHub Actions 新 run 中 Windows 构建长期停在 `Verify build fingerprint` 的问题。
+
+相关 run：
+
+- `https://github.com/dyz9219/agibot-converter/actions/runs/23583587627`
+
+## 现象
+
+最新 run 中：
+
+- `build-linux-x64` 成功
+- `build-linux-arm64` 成功
+- `build-windows` 最终被取消
+
+其中 Windows job 的时间线为：
+
+- `Verify build fingerprint` 于 `2026-03-26 08:06:15 UTC` 开始
+- 长时间未结束
+- job 于 `2026-03-26 14:02:55 UTC` 被取消
+
+## 根因分析
+
+通过拉取完整 job 日志并对照脚本，确认有两个独立问题：
+
+### 1. `verify_build_fingerprint.ps1` 缺少超时保护
+
+该脚本使用：
+
+```powershell
+Start-Process -FilePath $ExePath -ArgumentList @("--internal-build-info") -Wait ...
+```
+
+一旦打包后的 GUI EXE 在 CI runner 上没有按预期及时退出，脚本就会无限等待，最终把整个 Windows job 拖到超时或被取消。
+
+本地现有产物执行 `--internal-build-info` 可以正常退出，因此当前更合理的判断是：
+
+- 这一步在 CI 环境下存在阻塞风险；
+- 脚本没有任何超时与强制结束机制，导致问题不可恢复。
+
+### 2. `scripts/build_exe.ps1` 内部仍然执行了冲突安装
+
+虽然 workflow 外层已经改成了 curated install，但 `scripts/build_exe.ps1` 内部仍然有：
+
+- `pip install -e .`
+- `pip install pyinstaller`
+
+而日志显示在 `Build full package` 阶段，这个内部 `pip install -e .` 仍然触发了与 `lerobot 0.4.4 / torchvision 0.17.2` 相关的冲突。只是脚本没有及时中止，后续还继续打包。
+
+这说明：
+
+- Windows 打包脚本与 workflow 的依赖安装策略不一致；
+- 旧安装逻辑仍可能污染 venv，增加后续验证步骤的不确定性。
+
+## 改动方案
+
+本轮修复分两部分：
+
+1. 新增统一的 curated 安装脚本 `scripts/install_curated_env.ps1`
+   - 固定安装当前已验证可工作的依赖集合
+   - 使用 `--no-deps` 安装 `lerobot==0.4.4`
+   - 使用 `--no-deps` 安装本项目
+2. 收口所有 Windows 相关脚本的安装逻辑并补超时保护
+   - `build_exe.ps1`
+   - `build_exe_onefile.ps1`
+   - `run.ps1`
+   - `smoke_lerobot_exe.ps1`
+   - `verify_build_fingerprint.ps1`
+
+## 具体修改
+
+### 新增
+
+- `scripts/install_curated_env.ps1`
+
+### 更新
+
+- `scripts/build_exe.ps1`
+  - 改为复用 `install_curated_env.ps1`
+  - 显式启用 `$PSNativeCommandUseErrorActionPreference = $true`
+  - 修正构建完成提示路径
+- `scripts/build_exe_onefile.ps1`
+  - 改为复用 `install_curated_env.ps1`
+- `scripts/run.ps1`
+  - 改为复用 `install_curated_env.ps1`
+- `scripts/smoke_lerobot_exe.ps1`
+  - 改为复用 `install_curated_env.ps1`
+- `scripts/verify_build_fingerprint.ps1`
+  - 移除无限等待模式
+  - 增加 60 秒超时
+  - 超时后强制结束子进程并报错
+
+## 验证方式
+
+已完成：
+
+1. 拉取 GitHub Actions Windows job 全量日志，确认卡点在 `Verify build fingerprint`。
+2. 本地直接执行现有打包产物：
+   - `dist\DataConverterShell\DataConverterShell.exe --internal-build-info`
+   - 结果可正常退出并输出 JSON。
+3. 使用 PowerShell Parser 校验以下脚本语法：
+   - `scripts/install_curated_env.ps1`
+   - `scripts/build_exe.ps1`
+   - `scripts/build_exe_onefile.ps1`
+   - `scripts/run.ps1`
+   - `scripts/smoke_lerobot_exe.ps1`
+   - `scripts/verify_build_fingerprint.ps1`
+   - 结果均为 `PARSE_OK`
+
+说明：
+
+- 本地对旧产物运行 `verify_build_fingerprint.ps1` 返回 mismatch 是预期现象，因为旧产物对应的是旧 commit，不代表脚本故障。
+
+## 当前结论
+
+Windows 卡住不是单一业务代码问题，而是：
+
+- 指纹验证脚本缺少超时保护，导致 CI 上一旦 EXE 不退出就会无限挂住；
+- Windows 打包脚本内部仍沿用旧的冲突安装逻辑，和 workflow 外层策略不一致。
+
+当前已完成针对性修复，下一步应提交并重新触发 Actions，重点观察 Windows job 是否：
+
+1. 不再卡死在 `Verify build fingerprint`；
+2. 内部不再出现旧的 `pip install -e .` 依赖冲突日志。

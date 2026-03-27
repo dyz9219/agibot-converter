@@ -3,6 +3,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -66,10 +67,21 @@ New-Item -ItemType Directory -Path $buildLogDir -Force | Out-Null
 $stdoutPath = Join-Path $buildLogDir "verify-build-info.stdout.txt"
 $stderrPath = Join-Path $buildLogDir "verify-build-info.stderr.txt"
 
-$proc = Start-Process -FilePath $ExePath -ArgumentList @("--internal-build-info") -Wait -NoNewWindow -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
-if ($proc.ExitCode -ne 0) {
+$proc = Start-Process -FilePath $ExePath -ArgumentList @("--internal-build-info") -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+$timeoutSeconds = 60
+$finished = $null
+try {
+    $finished = Wait-Process -Id $proc.Id -Timeout $timeoutSeconds -PassThru -ErrorAction Stop
+} catch {
+    if (-not $proc.HasExited) {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
     $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -Raw } else { "" }
-    throw "Failed to read packaged build info, exit=$($proc.ExitCode)`n$stderr"
+    throw "Timed out waiting for packaged build info after $timeoutSeconds seconds.`n$stderr"
+}
+if ($finished.ExitCode -ne 0) {
+    $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -Raw } else { "" }
+    throw "Failed to read packaged build info, exit=$($finished.ExitCode)`n$stderr"
 }
 
 $raw = Get-Content $stdoutPath -Raw

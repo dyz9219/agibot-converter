@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -35,9 +36,7 @@ if (-not $SkipBuild) {
         python -m venv $venv
     }
 
-    & $py -m pip install -U pip
-    & $py -m pip install -e .
-    & $py -m pip install pyinstaller
+    & (Join-Path $PSScriptRoot "install_curated_env.ps1") -IncludeDev
 
     if (-not (Test-Path (Join-Path $any4 "agibot2lerobot\agibot_h5.py"))) {
         throw "Missing bundled any4lerobot source: $any4"

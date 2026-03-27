@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -10,6 +11,5 @@ if (-not (Test-Path $py)) {
     python -m venv $venv
 }
 
-& $py -m pip install -U pip
-& $py -m pip install -e .
+& (Join-Path $PSScriptRoot "install_curated_env.ps1")
 & $py -m data_converter.main

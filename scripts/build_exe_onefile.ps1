@@ -3,6 +3,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -23,15 +24,13 @@ if ($Clean) {
     if (Test-Path "$root\dist-onefile") { Remove-Item -Recurse -Force "$root\dist-onefile" }
 }
 
-& $py -m pip install -U pip
-& $py -m pip install -e .
-& $py -m pip install pyinstaller
+& (Join-Path $PSScriptRoot "install_curated_env.ps1") -IncludeDev
 
 if (-not (Test-Path (Join-Path $any4 "agibot2lerobot\agibot_h5.py"))) {
     throw "Missing bundled any4lerobot source: $any4"
 }
 if (-not (Test-Path (Join-Path $assets "pku_logo.ico"))) {
-    throw "Missing app icon asset: $assets\\pku_logo.ico"
+    throw "Missing app icon asset: $assets\pku_logo.ico"
 }
 
 & $py -m PyInstaller `
@@ -49,6 +48,8 @@ if (-not (Test-Path (Join-Path $assets "pku_logo.ico"))) {
   --collect-all agibot_utils `
   --collect-all psutil `
   --hidden-import psutil._psutil_windows `
+  --hidden-import ray.thirdparty_files.psutil._psutil_windows `
+  --collect-all ray.thirdparty_files.psutil `
   --collect-all rosbags `
   --collect-submodules rosbags.typesys.stores `
   --collect-data tkinter `

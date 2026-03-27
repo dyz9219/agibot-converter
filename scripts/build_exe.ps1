@@ -5,6 +5,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -32,25 +33,22 @@ if (-not $Profile) {
 }
 $resolvedProfile = $Profile.ToLowerInvariant()
 
-& $py -m pip install -U pip
-& $py -m pip install -e .
-& $py -m pip install pyinstaller
+& (Join-Path $PSScriptRoot "install_curated_env.ps1") -IncludeDev
 
 if (-not (Test-Path (Join-Path $any4 "agibot2lerobot\agibot_h5.py"))) {
     throw "Missing bundled any4lerobot source: $any4"
 }
 if (-not (Test-Path (Join-Path $assets "pku_logo.png"))) {
-    throw "Missing app icon asset: $assets\\pku_logo.png"
+    throw "Missing app icon asset: $assets\pku_logo.png"
 }
 if (-not (Test-Path (Join-Path $assets "pku_logo.ico"))) {
-    throw "Missing app icon asset: $assets\\pku_logo.ico"
+    throw "Missing app icon asset: $assets\pku_logo.ico"
 }
 
 $commit = (git rev-parse HEAD).Trim()
 $dirtyLines = @(git status --porcelain)
 $isDirty = $dirtyLines.Count -gt 0
 $dirtyPreview = @($dirtyLines | Select-Object -First 200)
-$escapedRoot = $root.Replace('\', '/')
 $fingerprintTempScript = Join-Path $env:TEMP "fingerprint_$([guid]::NewGuid().ToString()).py"
 $fingerprintCode = @"
 import hashlib
@@ -104,6 +102,7 @@ if ($resolvedProfile -eq "fast") {
         "--collect-all", "flet_desktop",
         "--collect-all", "psutil",
         "--hidden-import", "psutil._psutil_windows",
+        "--hidden-import", "ray.thirdparty_files.psutil._psutil_windows",
         "--collect-data", "tkinter"
     )
 } else {
@@ -120,6 +119,8 @@ if ($resolvedProfile -eq "fast") {
         "--collect-all", "agibot_utils",
         "--collect-all", "psutil",
         "--hidden-import", "psutil._psutil_windows",
+        "--hidden-import", "ray.thirdparty_files.psutil._psutil_windows",
+        "--collect-all", "ray.thirdparty_files.psutil",
         "--collect-all", "rosbags",
         "--collect-submodules", "rosbags.typesys.stores",
         "--collect-data", "tkinter"
@@ -145,4 +146,4 @@ $baseArgs = @(
 
 & $py @baseArgs @collectArgs
 
-Write-Host "Build finished. EXE output in $distPath\$name.exe" -ForegroundColor Green
+Write-Host "Build finished. EXE output in $distPath\$name\$name.exe" -ForegroundColor Green
