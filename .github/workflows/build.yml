@@ -66,7 +66,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel
           python -m pip install "setuptools<81.0.0,>=71.0.0"
-          python -m pip install "flet>=0.27,<1.0" "flet-desktop>=0.27,<1.0" "h5py>=3.10" "numpy>=1.26,<2" "opencv-python-headless>=4.9" "rosbags>=0.11" "ray[default]>=2.9" "torch==2.2.2" "torchvision==0.17.2" "datasets==4.1.1" "huggingface-hub==0.35.1" "pyarrow==21.0.0" "jsonlines>=4.0" "pillow>=10.0" "black>=24.0" "isort>=5.13" "mypy>=1.10" "ruff>=0.8" "pytest>=8.0" "pyinstaller>=6.0" "diffusers>=0.27.2,<0.36.0" "accelerate>=1.10.0,<2.0.0" "cmake>=3.29.0.1,<4.2.0" "einops>=0.8.0,<0.9.0" "av>=15.0.0,<16.0.0" "pynput>=1.7.7,<1.9.0" "pyserial>=3.5,<4.0" "wandb>=0.24.0,<0.25.0"
+          python -m pip install "flet>=0.27,<1.0" "flet-desktop>=0.27,<1.0" "h5py>=3.10" "numpy>=1.26,<2" "opencv-python-headless>=4.9" "rosbags>=0.11" "ray[default]>=2.9" "datasets==4.1.1" "huggingface-hub==0.35.1" "pyarrow==21.0.0" "jsonlines>=4.0" "pillow>=10.0" "black>=24.0" "isort>=5.13" "mypy>=1.10" "ruff>=0.8" "pytest>=8.0" "pyinstaller>=6.0" "diffusers>=0.27.2,<0.36.0" "accelerate>=1.10.0,<2.0.0" "cmake>=3.29.0.1,<4.2.0" "einops>=0.8.0,<0.9.0" "av>=15.0.0,<16.0.0" "pynput>=1.7.7,<1.9.0" "pyserial>=3.5,<4.0" "wandb>=0.24.0,<0.25.0"
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.2.2" "torchvision==0.17.2"
           python -m pip install --no-deps "lerobot==0.4.4"
           python -m pip install --no-deps -e ".[dev]"
       - name: Verify PyInstaller
@@ -83,6 +84,13 @@ jobs:
       - name: Make executable
         run: |
           chmod +x dist/DataConverterShell/DataConverterShell
+      - name: Smoke test binary
+        run: |
+          ./dist/DataConverterShell/DataConverterShell --internal-build-info >/tmp/build-info.json
+          ./dist/DataConverterShell/DataConverterShell --internal-run-rosbag-health --bag-type MCAP
+          ./dist/DataConverterShell/DataConverterShell --internal-run-any4-health --version v3.0
+          ./dist/DataConverterShell/DataConverterShell --internal-run-any4-health --version v2.1
+          ./dist/DataConverterShell/DataConverterShell --internal-run-any4-health --version v2.0
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -123,6 +131,13 @@ jobs:
       - name: Make executable
         run: |
           chmod +x dist/DataConverterShell
+      - name: Smoke test binary
+        run: |
+          ./dist/DataConverterShell --internal-build-info >/tmp/build-info.json
+          ./dist/DataConverterShell --internal-run-rosbag-health --bag-type MCAP
+          ./dist/DataConverterShell --internal-run-any4-health --version v3.0
+          ./dist/DataConverterShell --internal-run-any4-health --version v2.1
+          ./dist/DataConverterShell --internal-run-any4-health --version v2.0
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
