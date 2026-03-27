@@ -350,3 +350,60 @@ Windows 卡住不是单一业务代码问题，而是：
   - any4 bundled runtime 还需要经过这次平台修正后的下一轮 CI 验证。
 
 也就是说，当前剩下的是一个明确、可复现、已修补的跨平台探针问题，不再是之前那种“包太大且没有可用性证明”的状态。
+
+## 同日补充四：Linux any4 健康检查中的 ray 误判
+
+### 新现象
+
+在修正平台私有扩展名后，最新 run 中 Linux smoke test 仍失败，但日志已经收敛到新的明确原因：
+
+- `private_module=psutil._psutil_linux`
+- `psutil_files=_psutil_linux.abi3.so`
+- `ray_psutil_dir_missing`
+- `bundled_error=ModuleNotFoundError: No module named 'ray'`
+
+说明：
+
+- Linux 包内的 `psutil` 私有扩展已经能被正确识别；
+- 当前失败是因为 `_probe_psutil_runtime()` 仍把 `ray.thirdparty_files.psutil` 当成硬依赖；
+- 但当前 Linux PyInstaller 配置并没有打入 `ray`，因此这是 another false negative，而不是主程序必然不可用。
+
+### 本轮修复
+
+继续更新：
+
+- `src/data_converter/any4_health.py`
+
+调整内容：
+
+1. `lightweight` 探针中：
+   - 仅在 `ray` 包实际存在时，才进一步检查 `ray.thirdparty_files.psutil`
+2. frozen 导入探针中：
+   - 先判断 `ray.thirdparty_files.psutil` 是否存在；
+   - 存在才导入并校验其私有扩展；
+   - 不存在时不再误报失败
+
+这样探针就与当前 Linux 打包现实保持一致：
+
+- `psutil` 是必验项；
+- `ray` 只在被实际打包时才参与校验。
+
+### 本轮验证
+
+已完成：
+
+- `python -m py_compile src/data_converter/any4_health.py`
+- 结果通过。
+
+### 当前结论更新
+
+截至本次修复，Linux 侧已连续排除三类误判：
+
+1. `build_meta.json` 未打包
+2. `psutil._psutil_windows` 平台写死
+3. `ray.thirdparty_files.psutil` 被当成 Linux 硬依赖
+
+下一轮 CI 的意义就非常集中：
+
+- 如果通过，才能正式确认“缩包后 Linux 包仍可正常使用，且当前功能未被破坏”；
+- 如果仍失败，剩下的就会是更接近真实运行依赖的问题，而不是 smoke test 本身的误判。

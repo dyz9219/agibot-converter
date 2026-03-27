@@ -229,18 +229,17 @@ def _probe_psutil_runtime(*, lightweight: bool) -> str:
             if importlib.util.find_spec(private_module) is None:
                 raise ModuleNotFoundError(private_module)
             ray_dir = _package_dir_from_spec("ray")
-            if ray_dir is None:
-                raise ModuleNotFoundError("ray")
-            bundled_psutil_dir = ray_dir / "thirdparty_files" / "psutil"
-            if not bundled_psutil_dir.is_dir():
-                raise ModuleNotFoundError("ray.thirdparty_files.psutil")
-            if not any(bundled_psutil_dir.glob(f"{private_suffix}.*")):
-                raise ModuleNotFoundError(ray_private_module)
+            if ray_dir is not None:
+                bundled_psutil_dir = ray_dir / "thirdparty_files" / "psutil"
+                if bundled_psutil_dir.is_dir() and not any(bundled_psutil_dir.glob(f"{private_suffix}.*")):
+                    raise ModuleNotFoundError(ray_private_module)
         else:
             importlib.import_module("psutil")
             importlib.import_module(private_module)
-            importlib.import_module("ray.thirdparty_files.psutil")
-            importlib.import_module(ray_private_module)
+            if importlib.util.find_spec("ray.thirdparty_files.psutil") is not None:
+                importlib.import_module("ray.thirdparty_files.psutil")
+                if importlib.util.find_spec(ray_private_module) is not None:
+                    importlib.import_module(ray_private_module)
         return "ok"
     except Exception as exc:
         meipass = getattr(sys, "_MEIPASS", "")
