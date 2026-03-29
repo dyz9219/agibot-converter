@@ -1100,3 +1100,118 @@ Windows 卡住不是单一业务代码问题，而是：
 
 1. 若新 run 仍失败，优先继续抓完整 `--log-failed`，不再依赖网页摘要；
 2. 若 Linux 全绿，再考虑把 `gh run view --log-failed` 纳入固定排障流程，减少反复猜测。
+
+## 2026-03-29 Linux any4 健康检查第二阶段：补齐动态导入依赖打包
+
+### 问题背景
+
+在提交 `fix(any4): tolerate missing ray in linux health probe` 后，新 run `23639550604` 中：
+
+- `build-windows` 成功；
+- `build-linux-x64` 仍失败；
+- `build-linux-arm64` 仍失败；
+- 两条 Linux 线依然都卡在 `Smoke test binary`。
+
+这说明上一轮修复确实消除了一个误判点，但 Linux bundled 包里还存在下一层真实运行时问题。
+
+### 根因分析
+
+本轮继续沿“构建成功、smoke 失败”的思路排查，重点比较：
+
+1. Windows 打包链路使用的 `DataConverterShell.spec`
+2. Linux workflow 里直接写死的 `python -m PyInstaller ...` 命令
+
+对比后确认一个关键差异：
+
+- Windows spec 已显式收集：
+  - `ray`
+  - `torch`
+  - `lerobot`
+  - `psutil`
+  - `ray.thirdparty_files.psutil`
+- 但 Linux workflow 之前只收集：
+  - `flet`
+  - `flet_desktop`
+  - `rosbags`
+  - `tkinter`
+  - 以及原样打入 `any4lerobot` 目录
+
+而当前 any4 运行链路是：
+
+- 主程序在 bundled 模式下把 `any4lerobot` 目录加入 `sys.path`
+- 然后运行时动态导入 `agibot2lerobot.agibot_h5`
+- `agibot_h5.py` 又会导入：
+  - `lerobot.datasets.*`
+  - `torch`
+  - 以及相关运行时依赖
+
+这类“运行时动态导入 but 主分析入口没有静态 import 到”的包，如果不在 PyInstaller 阶段显式收集，就很容易出现：
+
+- 源码文件在包里；
+- 但其真实依赖不在包里；
+- 结果是健康检查从前一轮的 `ray` 误判继续推进后，进入真实导入阶段再失败。
+
+因此，本轮新的高概率根因是：
+
+- Linux workflow 没有像 Windows spec 那样补齐 any4 动态导入链所需的 PyInstaller 收集项；
+- bundled smoke test 在继续往下执行 any4 健康检查时，遇到真实缺包。
+
+### 改动方案
+
+本轮不再继续单改探针代码，而是直接补齐 Linux 打包命令中的依赖收集项，使其与 Windows spec 的依赖覆盖级别对齐。
+
+### 实际修改
+
+修改文件：
+
+- `.github/workflows/build.yml`
+
+调整内容：
+
+1. 对 `build-linux-x64` 的 PyInstaller 命令新增：
+   - `--collect-all torch`
+   - `--collect-all lerobot`
+   - `--collect-all ray`
+   - `--collect-all psutil`
+   - `--collect-all ray.thirdparty_files.psutil`
+   - `--hidden-import psutil._psutil_linux`
+   - `--hidden-import ray.thirdparty_files.psutil._psutil_linux`
+2. 对 `build-linux-arm64` 的 PyInstaller 命令同步新增相同收集项。
+
+这样 Linux 构建时会把 any4 在 bundled 模式下运行所需的动态依赖一并打入包内，而不只是打入 `any4lerobot` 源码目录。
+
+### 量化结果
+
+本轮本地静态验证：
+
+执行：
+
+- 读取 `.github/workflows/build.yml` 关键命令行
+- Python 断言 workflow 文本中包含新增的 `collect-all` / `hidden-import` 参数
+
+结果：
+
+- `workflow-check-ok`
+
+### 验证方式
+
+本轮验证步骤：
+
+1. 查询 run `23639550604` 的 jobs，确认 Windows 成功、Linux 仍在 smoke 阶段失败；
+2. 对比 Windows spec 与 Linux workflow 的 PyInstaller 收集项；
+3. 读取 `any4lerobot/agibot2lerobot/agibot_h5.py` 的真实导入链；
+4. 将 Linux workflow 的动态依赖收集项补齐；
+5. 用本地脚本断言 workflow 文字内容确实包含新增参数。
+
+### 当前结论与下一步建议
+
+当前结论：
+
+- Linux 失败已从“探针误判”进入“动态导入依赖未打包”的更真实阶段；
+- 本轮修复方向是把 Linux 的 PyInstaller 依赖收集能力补齐到接近 Windows spec 的覆盖水平；
+- 下一步应重新推送并观察新的 run，重点确认 Linux smoke 是否继续向后推进。
+
+建议下一步：
+
+1. 若下一轮仍失败，继续优先抓失败日志，而不是再根据网页摘要猜测；
+2. 若 Linux 通过，可考虑后续再评估是否要把 Linux 打包逻辑进一步收敛到统一 spec 或共享参数生成方式，减少平台间漂移。
