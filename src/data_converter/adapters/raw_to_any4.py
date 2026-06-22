@@ -116,6 +116,7 @@ def _build_min_any4_dataset(raw_dir: Path, dst_root: Path, source_name: str) -> 
     task_id = f"task_{task_numeric}"
     episode_id = 1
     issues: list[str] = []
+    init_scene_text = _read_platform_action_text(raw_dir) or "auto-adapted scene"
 
     # 1) task_info
     task_info_dir = dst_root / "task_info"
@@ -124,7 +125,7 @@ def _build_min_any4_dataset(raw_dir: Path, dst_root: Path, source_name: str) -> 
         {
             "episode_id": episode_id,
             "task_name": source_name,
-            "init_scene_text": "auto-adapted scene",
+            "init_scene_text": init_scene_text,
             "label_info": {"action_config": []},
         }
     ]
@@ -144,6 +145,49 @@ def _build_min_any4_dataset(raw_dir: Path, dst_root: Path, source_name: str) -> 
     proprio_dir.mkdir(parents=True, exist_ok=True)
     _build_proprio_stats(raw_dir / "aligned_joints.h5", proprio_dir / "proprio_stats.h5", issues)
     return issues
+
+
+def _read_platform_action_text(raw_dir: Path) -> str:
+    texts: list[str] = []
+    for annotation_path in _iter_annotation_result_candidates(raw_dir):
+        try:
+            payload = json.loads(annotation_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        texts.extend(_extract_action_texts(payload))
+        if texts:
+            break
+    return "；".join(dict.fromkeys(texts))
+
+
+def _iter_annotation_result_candidates(raw_dir: Path) -> list[Path]:
+    candidates: list[Path] = []
+    for base in (raw_dir, raw_dir.parent):
+        path = base / "annotation_result.json"
+        if path not in candidates and path.exists():
+            candidates.append(path)
+    return candidates
+
+
+def _extract_action_texts(payload: object) -> list[str]:
+    rows = payload if isinstance(payload, list) else [payload]
+    keyed: list[tuple[int, str]] = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        text = row.get("action_text")
+        if not isinstance(text, str):
+            continue
+        text = text.strip()
+        if not text:
+            continue
+        start_frame = row.get("start_frame", index)
+        try:
+            order = int(start_frame)
+        except (TypeError, ValueError):
+            order = index
+        keyed.append((order, text))
+    return [text for _, text in sorted(keyed, key=lambda item: item[0])]
 
 
 def _build_videos(raw_dir: Path, videos_dir: Path, warnings: list[str]) -> None:
@@ -454,6 +498,4 @@ def _is_raw_source(path: Path) -> bool:
         if (h5.parent / "state.json").exists():
             return True
     return False
-
-
 
