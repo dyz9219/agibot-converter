@@ -162,3 +162,41 @@ SCENE 把瓶子放进筐子里
 HAS_RAW_UTF8 False
 HAS_ASCII_ESCAPE True
 ```
+
+## 新 Windows 远程包最终复验
+
+提交 `1731ed26caea1aa2befa8f74daa63003fd15db49` 后，GitHub Actions run
+`27952148561` 的 `build-windows` job 成功完成：
+
+- `Build full package`: success
+- `Verify packaged any4`: success
+- `Verify build fingerprint`: success
+- `Upload artifact`: success
+
+下载新 artifact：
+
+```text
+name=DataConverterShell-Windows-full
+artifact_id=7792275242
+size=455942474
+```
+
+解压后使用包内 `DataConverterShell-full.exe --internal-build-info` 验证构建信息：
+
+```json
+{"profile":"full","git_commit":"1731ed26caea1aa2befa8f74daa63003fd15db49","git_dirty":false}
+```
+
+再用该 exe 转换真实 zip，并用 Python 按 UTF-8 精确读取输出元数据断言：
+
+```text
+ARTIFACT_SIZE 455942474
+MANIFEST_STATUS success
+RUNTIME_MODE bundled
+TASK task_2059925964389343234 | 把瓶子放进筐子里
+EPISODE_TASK task_2059925964389343234 | 把瓶子放进筐子里
+ELAPSED_SECONDS 23.296215
+```
+
+最终结论：新 Windows 远程打包产物已验证通过，`annotation_result.json[action_text]` 在打包态 LeRobot
+转换结果中保持为正确中文，没有退化为 `auto-adapted scene`，也没有 mojibake。
