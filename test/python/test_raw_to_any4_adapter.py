@@ -43,6 +43,9 @@ class RawToAny4AdapterTests(unittest.TestCase):
             task_info = json.loads(task_info_path.read_text(encoding="utf-8"))
 
             self.assertEqual(task_info[0]["init_scene_text"], "把瓶子放进筐子里")
+            raw_task_info = task_info_path.read_bytes()
+            self.assertNotIn("把瓶子放进筐子里".encode("utf-8"), raw_task_info)
+            self.assertIn(b"\\u628a\\u74f6\\u5b50", raw_task_info)
         finally:
             shutil.rmtree(root, ignore_errors=True)
 

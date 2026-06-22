@@ -118,3 +118,47 @@ pytest -q
 
 - 后续如平台标注增加更多字段，可在同一提取函数中扩展字段优先级。
 - 打包发布前继续执行 `full` 模式打包与 `verify_packaged_any4.ps1`，确保同事机器使用 EXE 时也包含本次修复。
+
+## Windows 远程包复验补充
+
+用户要求下载 GitHub Actions 生成的 Windows full artifact 并用该 zip 验证真实样例。下载
+`DataConverterShell-Windows-full.zip` 后，打包信息显示：
+
+```json
+{"profile":"full","git_commit":"d4df57222fd6236f559369b312913fd0746cf160","git_dirty":false}
+```
+
+使用该包内 `DataConverterShell-full.exe --internal-run-conversion` 转换真实 zip 时，`manifest.json`
+显示转换成功，且 `runtime_mode=bundled`。但 `meta/tasks.jsonl` 中中文指令变成 mojibake：
+
+```text
+task_2059925964389343234 | 鎶婄摱瀛愭斁杩涚瓙瀛愰噷
+```
+
+进一步分析确认：`raw_to_any4.py` 写入中间 `task_info/*.json` 时使用 `ensure_ascii=False`，文件为
+UTF-8 中文明文；Windows 打包态 any4 读取 `task_info` 时使用默认 ANSI/GBK 编码，导致 UTF-8 中文被误解码。
+
+修复方案：中间 `task_info/*.json` 改为 `ensure_ascii=True` 写入。这样磁盘文件只包含 ASCII `\uXXXX`
+转义，任意默认编码读取都不会破坏内容，`json.loads` 后仍恢复为正确中文。
+
+新增回归验证：
+
+```powershell
+pytest -q test\python\test_raw_to_any4_adapter.py
+pytest -q test\python
+```
+
+结果：
+
+```text
+2 passed in 0.44s
+56 passed, 6 skipped in 20.56s
+```
+
+真实 zip 的适配层验证结果：
+
+```text
+SCENE 把瓶子放进筐子里
+HAS_RAW_UTF8 False
+HAS_ASCII_ESCAPE True
+```

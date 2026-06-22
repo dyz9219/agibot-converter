@@ -130,7 +130,7 @@ def _build_min_any4_dataset(raw_dir: Path, dst_root: Path, source_name: str) -> 
         }
     ]
     (task_info_dir / f"{task_id}.json").write_text(
-        json.dumps(task_info, ensure_ascii=False, indent=2),
+        json.dumps(task_info, ensure_ascii=True, indent=2),
         encoding="utf-8",
     )
 
@@ -498,4 +498,3 @@ def _is_raw_source(path: Path) -> bool:
         if (h5.parent / "state.json").exists():
             return True
     return False
-
