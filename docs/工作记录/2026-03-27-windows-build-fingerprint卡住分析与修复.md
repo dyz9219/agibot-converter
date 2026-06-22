@@ -1215,3 +1215,97 @@ Windows 卡住不是单一业务代码问题，而是：
 
 1. 若下一轮仍失败，继续优先抓失败日志，而不是再根据网页摘要猜测；
 2. 若 Linux 通过，可考虑后续再评估是否要把 Linux 打包逻辑进一步收敛到统一 spec 或共享参数生成方式，减少平台间漂移。
+
+## 2026-03-29 Linux 打包链路最终验证：Actions 三平台全绿
+
+### 问题背景
+
+用户反馈“还是报错了”后，本轮继续对最新一次由提交 `c1ac753` 触发的 GitHub Actions run 做最终确认，避免再次根据旧页面缓存或中间状态误判。
+
+目标是明确两件事：
+
+1. Linux 两条构建线是否还在 `Smoke test binary` 失败；
+2. 前两轮修复是否已经形成完整闭环。
+
+### 根因回顾
+
+这次 Linux 失败实际由两个层级的问题叠加造成：
+
+1. **健康检查探针误判**
+   - frozen 模式下直接对 `ray.thirdparty_files.psutil` 做 `find_spec`
+   - 当 `ray` 顶层包本身不存在时，抛出 `ModuleNotFoundError`
+   - 上层被误报为 `psutil_runtime` 缺失
+2. **Linux PyInstaller 动态依赖收集不完整**
+   - Linux workflow 只带上了 `any4lerobot` 源码目录
+   - 但没有同步打入 `torch`、`lerobot`、`ray`、`psutil` 等运行时依赖
+   - 导致 health probe 继续往下执行后，进入真实 bundled 导入链时仍会失败
+
+因此，本次修复必须同时满足：
+
+- 探针在缺少可选包时安全降级；
+- Linux bundled 包真正具备 any4 运行所需依赖。
+
+### 实际改动
+
+本轮闭环中的关键改动共两部分：
+
+1. `src/data_converter/any4_health.py`
+   - 新增安全的 `_safe_find_spec(...)`
+   - 在 frozen 分支中对 `ray.thirdparty_files.psutil` 及其私有模块探测改为容错查询
+2. `.github/workflows/build.yml`
+   - 为 `build-linux-x64`、`build-linux-arm64` 同步补齐：
+     - `--collect-all torch`
+     - `--collect-all lerobot`
+     - `--collect-all ray`
+     - `--collect-all psutil`
+     - `--collect-all ray.thirdparty_files.psutil`
+     - `--hidden-import psutil._psutil_linux`
+     - `--hidden-import ray.thirdparty_files.psutil._psutil_linux`
+
+### 量化结果
+
+本轮最终确认到的 GitHub Actions run：
+
+- run id: `23699679917`
+- commit: `c1ac753b1fbb8f8329ae9cd24741880c721cd7ba`
+
+最终结果：
+
+- `build-linux-x64`: `success`
+- `build-linux-arm64`: `success`
+- `build-windows`: `success`
+
+其中 Linux 关键步骤已明确通过：
+
+- `Build binary`: success
+- `Smoke test binary`: success
+- `Upload artifact`: success
+
+本地验证结果保持为：
+
+- `pytest -q`: `57 passed, 4 skipped`
+- `pytest -q test/python/test_any4_health.py`: 通过
+- `python -m py_compile src/data_converter/any4_health.py src/data_converter/main.py`: 通过
+
+### 验证方式
+
+本轮验证方法：
+
+1. 查询 GitHub Actions run `23699679917` 的 jobs API；
+2. 核对三个 job 的最终 `conclusion`；
+3. 核对 Linux 两条 job 中 `Smoke test binary` 的 step 级状态；
+4. 与前两轮失败 run 对比，确认不再停留在 `ANY4_HEALTH_FAIL` 对应阶段。
+
+### 当前结论与下一步建议
+
+当前结论：
+
+- 本次 Linux 打包报错已经完成闭环修复；
+- 前两轮问题不是单点故障，而是“探针误判 + 动态依赖漏打包”的组合问题；
+- 提交 `c1ac753` 触发的最新 run 已证明修复后的多平台构建链路可通过。
+
+经验总结：
+
+1. 以后遇到“开发机正常、CI Linux bundled smoke 失败”，默认优先检查 **PyInstaller 收集项与运行时动态导入链**；
+2. `find_spec` 探测可选包时，不能假设父包一定存在，必须容错；
+3. Linux workflow 与 Windows spec 若长期分叉，极易出现平台间依赖漂移，后续可考虑进一步收敛为共享打包参数或统一 spec。
