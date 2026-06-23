@@ -27,7 +27,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel
           python -m pip install "setuptools<81.0.0,>=71.0.0"
-          python -m pip install "flet>=0.27,<1.0" "flet-desktop>=0.27,<1.0" "h5py>=3.10" "numpy>=1.26,<2" "opencv-python-headless>=4.9" "rosbags>=0.11" "ray[default]>=2.9" "torch==2.2.2" "torchvision==0.17.2" "datasets==4.1.1" "huggingface-hub==0.35.1" "pyarrow==21.0.0" "jsonlines>=4.0" "pillow>=10.0" "black>=24.0" "isort>=5.13" "mypy>=1.10" "ruff>=0.8" "pytest>=8.0" "pyinstaller>=6.0" "diffusers>=0.27.2,<0.36.0" "accelerate>=1.10.0,<2.0.0" "cmake>=3.29.0.1,<4.2.0" "einops>=0.8.0,<0.9.0" "av>=15.0.0,<16.0.0" "pynput>=1.7.7,<1.9.0" "pyserial>=3.5,<4.0" "wandb>=0.24.0,<0.25.0"
+          python -m pip install "flet>=0.27,<1.0" "flet-desktop>=0.27,<1.0" "h5py>=3.10" "numpy>=1.26,<2" "opencv-python-headless>=4.9" "rosbags>=0.11" "ray>=2.9" "torch==2.2.2" "torchvision==0.17.2" "datasets==4.1.1" "huggingface-hub==0.35.1" "pyarrow==21.0.0" "jsonlines>=4.0" "pillow>=10.0" "accelerate>=1.10.0,<2.0.0" "av>=15.0.0,<16.0.0" "black>=24.0" "isort>=5.13" "mypy>=1.10" "ruff>=0.8" "pytest>=8.0" "pyinstaller>=6.0"
           python -m pip install --no-deps "lerobot==0.4.4"
           python -m pip install --no-deps -e ".[dev]"
       - name: Verify environment
@@ -66,7 +66,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel
           python -m pip install "setuptools<81.0.0,>=71.0.0"
-          python -m pip install "flet>=0.27,<1.0" "flet-desktop>=0.27,<1.0" "h5py>=3.10" "numpy>=1.26,<2" "opencv-python-headless>=4.9" "rosbags>=0.11" "ray[default]>=2.9" "datasets==4.1.1" "huggingface-hub==0.35.1" "pyarrow==21.0.0" "jsonlines>=4.0" "pillow>=10.0" "black>=24.0" "isort>=5.13" "mypy>=1.10" "ruff>=0.8" "pytest>=8.0" "pyinstaller>=6.0" "diffusers>=0.27.2,<0.36.0" "accelerate>=1.10.0,<2.0.0" "cmake>=3.29.0.1,<4.2.0" "einops>=0.8.0,<0.9.0" "av>=15.0.0,<16.0.0" "pynput>=1.7.7,<1.9.0" "pyserial>=3.5,<4.0" "wandb>=0.24.0,<0.25.0"
+          python -m pip install "flet>=0.27,<1.0" "flet-desktop>=0.27,<1.0" "h5py>=3.10" "numpy>=1.26,<2" "opencv-python-headless>=4.9" "rosbags>=0.11" "ray>=2.9" "datasets==4.1.1" "huggingface-hub==0.35.1" "pyarrow==21.0.0" "jsonlines>=4.0" "pillow>=10.0" "accelerate>=1.10.0,<2.0.0" "av>=15.0.0,<16.0.0" "black>=24.0" "isort>=5.13" "mypy>=1.10" "ruff>=0.8" "pytest>=8.0" "pyinstaller>=6.0"
           python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.2.2" "torchvision==0.17.2"
           python -m pip install --no-deps "lerobot==0.4.4"
           python -m pip install --no-deps -e ".[dev]"
@@ -100,7 +100,7 @@ jobs:
           if [ -d "$PWD/assets" ]; then
             EXTRA_ARGS+=(--add-data "$PWD/assets:assets")
           fi
-          python -m PyInstaller --noconfirm --onedir --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-all torch --collect-all lerobot --collect-all ray --collect-all psutil --collect-all ray.thirdparty_files.psutil --collect-submodules rosbags.typesys.stores --collect-data tkinter --hidden-import psutil._psutil_linux --hidden-import ray.thirdparty_files.psutil._psutil_linux --add-data "$PWD/any4lerobot:any4lerobot" --add-data "$PWD/build/build-meta/build_meta.json:assets" "${EXTRA_ARGS[@]}" src/data_converter/main.py
+          python -m PyInstaller --noconfirm --onedir --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-all torch --collect-all lerobot --collect-submodules ray --collect-binaries ray --collect-all psutil --collect-all ray.thirdparty_files.psutil --collect-submodules rosbags.typesys.stores --collect-data tkinter --hidden-import psutil._psutil_linux --hidden-import ray.thirdparty_files.psutil._psutil_linux --add-data "$PWD/any4lerobot:any4lerobot" --add-data "$PWD/build/build-meta/build_meta.json:assets" "${EXTRA_ARGS[@]}" src/data_converter/main.py
       - name: Make executable
         run: |
           chmod +x dist/DataConverterShell/DataConverterShell
@@ -134,7 +134,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel
           python -m pip install "setuptools<81.0.0,>=71.0.0"
-          python -m pip install "flet>=0.27,<1.0" "flet-desktop>=0.27,<1.0" "h5py>=3.10" "numpy>=1.26,<2" "opencv-python-headless>=4.9" "rosbags>=0.11" "ray[default]>=2.9" "torch==2.2.2" "torchvision==0.17.2" "datasets==4.1.1" "huggingface-hub==0.35.1" "pyarrow==21.0.0" "jsonlines>=4.0" "pillow>=10.0" "black>=24.0" "isort>=5.13" "mypy>=1.10" "ruff>=0.8" "pytest>=8.0" "pyinstaller>=6.0" "diffusers>=0.27.2,<0.36.0" "accelerate>=1.10.0,<2.0.0" "cmake>=3.29.0.1,<4.2.0" "einops>=0.8.0,<0.9.0" "av>=15.0.0,<16.0.0" "pynput>=1.7.7,<1.9.0" "pyserial>=3.5,<4.0" "wandb>=0.24.0,<0.25.0"
+          python -m pip install "flet>=0.27,<1.0" "flet-desktop>=0.27,<1.0" "h5py>=3.10" "numpy>=1.26,<2" "opencv-python-headless>=4.9" "rosbags>=0.11" "ray>=2.9" "torch==2.2.2" "torchvision==0.17.2" "datasets==4.1.1" "huggingface-hub==0.35.1" "pyarrow==21.0.0" "jsonlines>=4.0" "pillow>=10.0" "accelerate>=1.10.0,<2.0.0" "av>=15.0.0,<16.0.0" "black>=24.0" "isort>=5.13" "mypy>=1.10" "ruff>=0.8" "pytest>=8.0" "pyinstaller>=6.0"
           python -m pip install --no-deps "lerobot==0.4.4"
           python -m pip install --no-deps -e ".[dev]"
       - name: Verify PyInstaller
@@ -167,7 +167,7 @@ jobs:
           if [ -d "$PWD/assets" ]; then
             EXTRA_ARGS+=(--add-data "$PWD/assets:assets")
           fi
-          python -m PyInstaller --noconfirm --onefile --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-all torch --collect-all lerobot --collect-all ray --collect-all psutil --collect-all ray.thirdparty_files.psutil --collect-submodules rosbags.typesys.stores --collect-data tkinter --hidden-import psutil._psutil_linux --hidden-import ray.thirdparty_files.psutil._psutil_linux --add-data "$PWD/any4lerobot:any4lerobot" --add-data "$PWD/build/build-meta/build_meta.json:assets" "${EXTRA_ARGS[@]}" src/data_converter/main.py
+          python -m PyInstaller --noconfirm --onefile --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-all torch --collect-all lerobot --collect-submodules ray --collect-binaries ray --collect-all psutil --collect-all ray.thirdparty_files.psutil --collect-submodules rosbags.typesys.stores --collect-data tkinter --hidden-import psutil._psutil_linux --hidden-import ray.thirdparty_files.psutil._psutil_linux --add-data "$PWD/any4lerobot:any4lerobot" --add-data "$PWD/build/build-meta/build_meta.json:assets" "${EXTRA_ARGS[@]}" src/data_converter/main.py
       - name: Make executable
         run: |
           chmod +x dist/DataConverterShell
