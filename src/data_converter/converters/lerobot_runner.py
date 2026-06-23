@@ -192,6 +192,7 @@ def run_lerobot_task(task: TaskPlan, options: ConversionOptions) -> None:
                 _embed_videos_in_parquet(runtime_output_dir, raw_source_dir=raw_image_source)
             elif options.embed_videos_in_parquet:
                 _embed_videos_in_parquet(runtime_output_dir, raw_source_dir=raw_image_source)
+            _normalize_lerobot_task_text_metadata(runtime_output_dir)
             _validate_lerobot_output(runtime_output_dir, version)
         if stage_root is not None:
             with _StageTimer(task, "sync_tree"):
@@ -1361,6 +1362,120 @@ def _repair_lerobot_metadata(output_dir: Path) -> None:
                 info_path.write_text(json.dumps(info, ensure_ascii=False, indent=4), encoding="utf-8")
         except Exception:
             continue
+
+
+def _normalize_lerobot_task_text_metadata(output_dir: Path) -> None:
+    for root in _iter_dataset_roots(output_dir):
+        _normalize_tasks_parquet(root / "meta" / "tasks.parquet")
+        _normalize_episode_tasks_parquets(root / "meta" / "episodes")
+        _normalize_task_jsonl(root / "meta" / "tasks.jsonl")
+        _normalize_episode_jsonl(root / "meta" / "episodes.jsonl")
+
+
+def _normalize_task_text(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    prefix, sep, instruction = value.partition(" | ")
+    if sep and prefix.strip() and instruction.strip():
+        return instruction.strip()
+    return value
+
+
+def _normalize_tasks_parquet(path: Path) -> None:
+    if not path.exists():
+        return
+    try:
+        import pyarrow as pa  # type: ignore
+        import pyarrow.parquet as pq  # type: ignore
+    except Exception:
+        return
+
+    try:
+        table = pq.read_table(path)
+        changed = False
+        for column_name in ("task", "__index_level_0__"):
+            if column_name not in table.column_names:
+                continue
+            index = table.column_names.index(column_name)
+            field = table.schema.field(index)
+            values = table.column(index).to_pylist()
+            normalized = [_normalize_task_text(value) for value in values]
+            if normalized == values:
+                continue
+            table = table.set_column(index, field, pa.array(normalized, type=field.type))
+            changed = True
+        if changed:
+            pq.write_table(table, path, compression="snappy")
+    except Exception:
+        return
+
+
+def _normalize_episode_tasks_parquets(episodes_dir: Path) -> None:
+    if not episodes_dir.exists():
+        return
+    try:
+        import pyarrow as pa  # type: ignore
+        import pyarrow.parquet as pq  # type: ignore
+    except Exception:
+        return
+
+    for path in sorted(episodes_dir.rglob("*.parquet")):
+        try:
+            table = pq.read_table(path)
+            if "tasks" not in table.column_names:
+                continue
+            index = table.column_names.index("tasks")
+            field = table.schema.field(index)
+            values = table.column(index).to_pylist()
+            normalized = [
+                [_normalize_task_text(task) for task in tasks] if isinstance(tasks, list) else tasks
+                for tasks in values
+            ]
+            if normalized == values:
+                continue
+            table = table.set_column(index, field, pa.array(normalized, type=field.type))
+            pq.write_table(table, path, compression="snappy")
+        except Exception:
+            continue
+
+
+def _normalize_task_jsonl(path: Path) -> None:
+    _normalize_jsonl_file(path, "task")
+
+
+def _normalize_episode_jsonl(path: Path) -> None:
+    _normalize_jsonl_file(path, "tasks")
+
+
+def _normalize_jsonl_file(path: Path, field_name: str) -> None:
+    if not path.exists():
+        return
+    try:
+        rows: list[object] = []
+        changed = False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                rows.append(row)
+                continue
+            value = row.get(field_name)
+            if isinstance(value, list):
+                normalized = [_normalize_task_text(item) for item in value]
+            else:
+                normalized = _normalize_task_text(value)
+            if normalized != value:
+                row[field_name] = normalized
+                changed = True
+            rows.append(row)
+        if changed:
+            path.write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+    except Exception:
+        return
 
 
 def _embed_videos_in_parquet(output_dir: Path, raw_source_dir: Path | None = None) -> None:
