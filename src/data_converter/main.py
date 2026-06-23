@@ -50,6 +50,34 @@ BTN_HEIGHT = 34
 RADIUS = 6
 
 
+def _padding_symmetric(*, horizontal: int = 0, vertical: int = 0):
+    padding = getattr(ft, "padding", None)
+    if padding is not None and hasattr(padding, "symmetric"):
+        return padding.symmetric(horizontal=horizontal, vertical=vertical)
+    return ft.Padding.symmetric(horizontal=horizontal, vertical=vertical)
+
+
+def _padding_only(*, left: int = 0, right: int = 0, top: int = 0, bottom: int = 0):
+    padding = getattr(ft, "padding", None)
+    if padding is not None and hasattr(padding, "only"):
+        return padding.only(left=left, right=right, top=top, bottom=bottom)
+    return ft.Padding.only(left=left, right=right, top=top, bottom=bottom)
+
+
+def _border_all(width, color):
+    border = getattr(ft, "border", None)
+    if border is not None and hasattr(border, "all"):
+        return border.all(width, color)
+    return ft.Border.all(width, color)
+
+
+def _border_only(**kwargs):
+    border = getattr(ft, "border", None)
+    if border is not None and hasattr(border, "only"):
+        return border.only(**kwargs)
+    return ft.Border.only(**kwargs)
+
+
 def _resolve_asset_path(name: str) -> str:
     candidates: list[Path] = []
     meipass = getattr(sys, "_MEIPASS", None)
@@ -68,8 +96,8 @@ def _card(content: ft.Control) -> ft.Container:
     return ft.Container(
         bgcolor=PANEL,
         border_radius=8,
-        border=ft.border.all(1, BORDER),
-        padding=ft.padding.symmetric(horizontal=12, vertical=10),
+        border=_border_all(1, BORDER),
+        padding=_padding_symmetric(horizontal=12, vertical=10),
         content=content,
     )
 
@@ -78,7 +106,7 @@ def _badge(label: str, color: str, bg: str) -> ft.Container:
     return ft.Container(
         bgcolor=bg,
         border_radius=10,
-        padding=ft.padding.symmetric(horizontal=8, vertical=2),
+        padding=_padding_symmetric(horizontal=8, vertical=2),
         content=ft.Text(label, size=BADGE_SIZE, color=color, weight=ft.FontWeight.W_500),
     )
 
@@ -91,7 +119,7 @@ def _button(label: str, on_click=None, primary: bool = False) -> ft.ElevatedButt
         style=ft.ButtonStyle(
             bgcolor=PRIMARY if primary else "#E5E5E7",
             color="#FFFFFF" if primary else TEXT,
-            padding=ft.padding.symmetric(horizontal=14, vertical=7),
+            padding=_padding_symmetric(horizontal=14, vertical=7),
             shape=ft.RoundedRectangleBorder(radius=RADIUS),
             text_style=ft.TextStyle(size=BODY_SIZE, weight=ft.FontWeight.W_500, font_family=FONT_FAMILY),
             side=ft.BorderSide(1, PRIMARY if primary else "#D1D1D3"),
@@ -107,7 +135,7 @@ def _path_selector(title: str, value_field: ft.TextField, on_pick=None) -> ft.Co
             ft.Container(
                 bgcolor=BG,
                 border_radius=RADIUS,
-                padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                padding=_padding_symmetric(horizontal=12, vertical=8),
                 content=ft.Row(
                     spacing=8,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -145,7 +173,7 @@ def _task_row(
     return ft.Container(
         bgcolor=BG,
         border_radius=RADIUS,
-        padding=ft.padding.symmetric(horizontal=10, vertical=8),
+        padding=_padding_symmetric(horizontal=10, vertical=8),
         on_click=on_toggle if detail else None,
         content=ft.Column(
             spacing=6,
@@ -188,9 +216,9 @@ def _uniform_input_shell(control: ft.Control, width: int) -> ft.Container:
         width=width,
         height=CTRL_HEIGHT,
         bgcolor="#FFFFFF",
-        border=ft.border.all(1, "#D1D1D3"),
+        border=_border_all(1, "#D1D1D3"),
         border_radius=RADIUS,
-        padding=ft.padding.only(left=8, right=8, top=0, bottom=0),
+        padding=_padding_only(left=8, right=8, top=0, bottom=0),
         alignment=ft.Alignment(-1, 0),
         content=control,
     )
@@ -219,7 +247,7 @@ def _build(page: ft.Page) -> ft.Control:
         style=ft.ButtonStyle(
             color=PRIMARY,
             text_style=ft.TextStyle(size=SUB_SIZE, weight=ft.FontWeight.W_500),
-            padding=ft.padding.symmetric(horizontal=6, vertical=0),
+            padding=_padding_symmetric(horizontal=6, vertical=0),
         ),
     )
     picker = ft.FilePicker()
@@ -233,7 +261,7 @@ def _build(page: ft.Page) -> ft.Control:
         text_size=SUB_SIZE,
         read_only=True,
         expand=True,
-        content_padding=ft.padding.only(left=0, right=0, top=8, bottom=8),
+        content_padding=_padding_only(left=0, right=0, top=8, bottom=8),
     )
     output = ft.TextField(
         value="",
@@ -243,7 +271,7 @@ def _build(page: ft.Page) -> ft.Control:
         text_size=SUB_SIZE,
         read_only=True,
         expand=True,
-        content_padding=ft.padding.only(left=0, right=0, top=8, bottom=8),
+        content_padding=_padding_only(left=0, right=0, top=8, bottom=8),
     )
     detect = ft.Text("待识别", size=SUB_SIZE, color=MUTED)
     preflight = ft.Text("未预检", size=SUB_SIZE, color=MUTED, weight=ft.FontWeight.W_500)
@@ -255,7 +283,7 @@ def _build(page: ft.Page) -> ft.Control:
         width=88,
         text_size=BODY_SIZE,
         border_width=0,
-        content_padding=ft.padding.only(left=0, right=0, top=8, bottom=8),
+        content_padding=_padding_only(left=0, right=0, top=8, bottom=8),
         options=[
             ft.dropdownm2.Option("v3.0"),
             ft.dropdownm2.Option("v2.1"),
@@ -270,7 +298,7 @@ def _build(page: ft.Page) -> ft.Control:
         width=88,
         text_size=BODY_SIZE,
         border_width=0,
-        content_padding=ft.padding.only(left=0, right=0, top=8, bottom=8),
+        content_padding=_padding_only(left=0, right=0, top=8, bottom=8),
     )
     version_shell = _uniform_input_shell(version, WIDTH_M)
     fps_shell = _uniform_input_shell(fps, WIDTH_S)
@@ -282,7 +310,7 @@ def _build(page: ft.Page) -> ft.Control:
         width=112,
         text_size=BODY_SIZE,
         border_width=0,
-        content_padding=ft.padding.only(left=0, right=0, top=8, bottom=8),
+        content_padding=_padding_only(left=0, right=0, top=8, bottom=8),
         options=[
             ft.dropdownm2.Option("MCAP"),
             ft.dropdownm2.Option("ROS2 .db3"),
@@ -311,13 +339,23 @@ def _build(page: ft.Page) -> ft.Control:
         width=88,
         text_size=BODY_SIZE,
         border_width=0,
-        content_padding=ft.padding.only(left=0, right=0, top=8, bottom=8),
+        content_padding=_padding_only(left=0, right=0, top=8, bottom=8),
         options=[ft.dropdownm2.Option(str(i)) for i in range(4, MAX_CONCURRENCY + 1, 4)],
     )
     concurrent_shell = _uniform_input_shell(concurrent, WIDTH_S)
 
-    seg_left = ft.Container(width=170, border_radius=RADIUS, padding=ft.padding.symmetric(horizontal=14, vertical=7), alignment=ft.Alignment(0, 0))
-    seg_right = ft.Container(width=170, border_radius=RADIUS, padding=ft.padding.symmetric(horizontal=14, vertical=7), alignment=ft.Alignment(0, 0))
+    seg_left = ft.Container(
+        width=170,
+        border_radius=RADIUS,
+        padding=_padding_symmetric(horizontal=14, vertical=7),
+        alignment=ft.Alignment(0, 0),
+    )
+    seg_right = ft.Container(
+        width=170,
+        border_radius=RADIUS,
+        padding=_padding_symmetric(horizontal=14, vertical=7),
+        alignment=ft.Alignment(0, 0),
+    )
 
     row_le = ft.Row(
         spacing=10,
@@ -418,9 +456,9 @@ def _build(page: ft.Page) -> ft.Control:
     def _sync_target() -> None:
         is_le = state["target"] == "LeRobot"
         seg_left.bgcolor = "#EAF3FF" if is_le else PANEL
-        seg_left.border = ft.border.all(1, PRIMARY if is_le else "#D1D1D3")
+        seg_left.border = _border_all(1, PRIMARY if is_le else "#D1D1D3")
         seg_right.bgcolor = "#EAF3FF" if not is_le else PANEL
-        seg_right.border = ft.border.all(1, PRIMARY if not is_le else "#D1D1D3")
+        seg_right.border = _border_all(1, PRIMARY if not is_le else "#D1D1D3")
         row_le.visible = is_le
         row_rb.visible = not is_le
         bag_type.visible = not is_le
@@ -805,8 +843,8 @@ def _build(page: ft.Page) -> ft.Control:
 
     header = ft.Container(
         bgcolor="#FFFFFF",
-        border=ft.border.only(bottom=ft.BorderSide(1, BORDER)),
-        padding=ft.padding.symmetric(horizontal=16, vertical=10),
+        border=_border_only(bottom=ft.BorderSide(1, BORDER)),
+        padding=_padding_symmetric(horizontal=16, vertical=10),
         content=ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -955,7 +993,7 @@ def _badge_text_container(text_control: ft.Text) -> ft.Container:
     return ft.Container(
         bgcolor="#E5E5E7",
         border_radius=10,
-        padding=ft.padding.symmetric(horizontal=8, vertical=2),
+        padding=_padding_symmetric(horizontal=8, vertical=2),
         content=text_control,
     )
 
