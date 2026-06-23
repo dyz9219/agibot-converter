@@ -44,7 +44,8 @@ if (-not (Test-Path (Join-Path $assets "pku_logo.ico"))) {
   --collect-all flet_desktop `
   --collect-submodules ray `
   --collect-binaries ray `
-  --collect-all torch `
+  --collect-binaries torch `
+  --hidden-import torch `
   --collect-all lerobot `
   --collect-all agibot_utils `
   --collect-all psutil `

@@ -100,7 +100,7 @@ jobs:
           if [ -d "$PWD/assets" ]; then
             EXTRA_ARGS+=(--add-data "$PWD/assets:assets")
           fi
-          python -m PyInstaller --noconfirm --onedir --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-all torch --collect-all lerobot --collect-submodules ray --collect-binaries ray --collect-all psutil --collect-all ray.thirdparty_files.psutil --collect-submodules rosbags.typesys.stores --collect-data tkinter --hidden-import psutil._psutil_linux --hidden-import ray.thirdparty_files.psutil._psutil_linux --add-data "$PWD/any4lerobot:any4lerobot" --add-data "$PWD/build/build-meta/build_meta.json:assets" "${EXTRA_ARGS[@]}" src/data_converter/main.py
+          python -m PyInstaller --noconfirm --onedir --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-binaries torch --hidden-import torch --collect-all lerobot --collect-submodules ray --collect-binaries ray --collect-all psutil --collect-all ray.thirdparty_files.psutil --collect-submodules rosbags.typesys.stores --collect-data tkinter --hidden-import psutil._psutil_linux --hidden-import ray.thirdparty_files.psutil._psutil_linux --add-data "$PWD/any4lerobot:any4lerobot" --add-data "$PWD/build/build-meta/build_meta.json:assets" "${EXTRA_ARGS[@]}" src/data_converter/main.py
       - name: Make executable
         run: |
           chmod +x dist/DataConverterShell/DataConverterShell
@@ -167,7 +167,7 @@ jobs:
           if [ -d "$PWD/assets" ]; then
             EXTRA_ARGS+=(--add-data "$PWD/assets:assets")
           fi
-          python -m PyInstaller --noconfirm --onefile --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-all torch --collect-all lerobot --collect-submodules ray --collect-binaries ray --collect-all psutil --collect-all ray.thirdparty_files.psutil --collect-submodules rosbags.typesys.stores --collect-data tkinter --hidden-import psutil._psutil_linux --hidden-import ray.thirdparty_files.psutil._psutil_linux --add-data "$PWD/any4lerobot:any4lerobot" --add-data "$PWD/build/build-meta/build_meta.json:assets" "${EXTRA_ARGS[@]}" src/data_converter/main.py
+          python -m PyInstaller --noconfirm --onefile --windowed --name DataConverterShell --distpath dist --workpath build --collect-all flet --collect-all flet_desktop --collect-all rosbags --collect-binaries torch --hidden-import torch --collect-all lerobot --collect-submodules ray --collect-binaries ray --collect-all psutil --collect-all ray.thirdparty_files.psutil --collect-submodules rosbags.typesys.stores --collect-data tkinter --hidden-import psutil._psutil_linux --hidden-import ray.thirdparty_files.psutil._psutil_linux --add-data "$PWD/any4lerobot:any4lerobot" --add-data "$PWD/build/build-meta/build_meta.json:assets" "${EXTRA_ARGS[@]}" src/data_converter/main.py
       - name: Make executable
         run: |
           chmod +x dist/DataConverterShell

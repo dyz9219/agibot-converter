@@ -43,3 +43,20 @@ def test_packaging_scripts_do_not_collect_all_ray() -> None:
         script = _read_repo_text(path)
         assert re.search(r"--collect-all\s+ray(?:\s|`|$)", script) is None
         assert '"--collect-all", "ray"' not in script
+
+
+def test_packaging_scripts_do_not_collect_all_torch() -> None:
+    packaging_scripts = [
+        "scripts/build_exe.ps1",
+        "scripts/build_exe_onefile.ps1",
+        "scripts/smoke_lerobot_exe.ps1",
+        ".github/workflows/build.yml",
+    ]
+
+    for path in packaging_scripts:
+        script = _read_repo_text(path)
+        assert re.search(r"--collect-all\s+torch(?:\s|`|$)", script) is None
+        assert re.search(r"--collect-submodules\s+torch(?:\s|`|$)", script) is None
+        assert '"--collect-all", "torch"' not in script
+        assert '"--collect-submodules", "torch"' not in script
+
