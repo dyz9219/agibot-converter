@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_dynamic_libs
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import collect_all
 
@@ -7,12 +8,12 @@ datas = [('D:\\workspace\\work\\bwy\\agibot-converter\\any4lerobot', 'any4lerobo
 binaries = []
 hiddenimports = ['psutil._psutil_windows', 'ray.thirdparty_files.psutil._psutil_windows']
 datas += collect_data_files('tkinter')
+binaries += collect_dynamic_libs('ray')
+hiddenimports += collect_submodules('ray')
 hiddenimports += collect_submodules('rosbags.typesys.stores')
 tmp_ret = collect_all('flet')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('flet_desktop')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('ray')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('torch')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]

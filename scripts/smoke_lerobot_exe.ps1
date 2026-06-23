@@ -57,7 +57,8 @@ if (-not $SkipBuild) {
       --workpath $workPath `
       --collect-all flet `
       --collect-all flet_desktop `
-      --collect-all ray `
+      --collect-submodules ray `
+      --collect-binaries ray `
       --collect-all torch `
       --collect-all lerobot `
       --collect-all agibot_utils `

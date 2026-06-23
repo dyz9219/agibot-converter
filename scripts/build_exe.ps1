@@ -102,7 +102,6 @@ if ($resolvedProfile -eq "fast") {
         "--collect-all", "flet_desktop",
         "--collect-all", "psutil",
         "--hidden-import", "psutil._psutil_windows",
-        "--hidden-import", "ray.thirdparty_files.psutil._psutil_windows",
         "--collect-data", "tkinter"
     )
 } else {
@@ -112,7 +111,8 @@ if ($resolvedProfile -eq "fast") {
     $collectArgs = @(
         "--collect-all", "flet",
         "--collect-all", "flet_desktop",
-        "--collect-all", "ray",
+        "--collect-submodules", "ray",
+        "--collect-binaries", "ray",
         "--collect-all", "torch",
         "--collect-all", "lerobot",
         "--collect-all", "jsonlines",
