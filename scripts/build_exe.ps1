@@ -128,6 +128,7 @@ if ($resolvedProfile -eq "fast") {
         "--hidden-import", "psutil._psutil_windows",
         "--hidden-import", "ray.thirdparty_files.psutil._psutil_windows",
         "--collect-all", "ray.thirdparty_files.psutil",
+        "--collect-all", "ray.thirdparty_files.colorama",
         "--collect-all", "rosbags",
         "--collect-submodules", "rosbags.typesys.stores",
         "--collect-data", "tkinter"

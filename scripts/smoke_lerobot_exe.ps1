@@ -67,6 +67,7 @@ if (-not $SkipBuild) {
       --collect-all agibot_utils `
       --collect-all psutil `
       --hidden-import psutil._psutil_windows `
+      --collect-all ray.thirdparty_files.colorama `
       --collect-all rosbags `
       --collect-submodules rosbags.typesys.stores `
       --add-data "$any4;any4lerobot" `

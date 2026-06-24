@@ -54,6 +54,7 @@ if (-not (Test-Path (Join-Path $assets "pku_logo.ico"))) {
   --hidden-import psutil._psutil_windows `
   --hidden-import ray.thirdparty_files.psutil._psutil_windows `
   --collect-all ray.thirdparty_files.psutil `
+  --collect-all ray.thirdparty_files.colorama `
   --collect-all rosbags `
   --collect-submodules rosbags.typesys.stores `
   --collect-data tkinter `
