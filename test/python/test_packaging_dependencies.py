@@ -42,7 +42,10 @@ def test_packaging_scripts_do_not_collect_all_ray() -> None:
     for path in packaging_scripts:
         script = _read_repo_text(path)
         assert re.search(r"--collect-all\s+ray(?:\s|`|$)", script) is None
+        assert re.search(r"--collect-submodules\s+ray(?:\s|`|$)", script) is None
         assert '"--collect-all", "ray"' not in script
+        assert '"--collect-submodules", "ray"' not in script
+        assert "ray.runtime_env" in script
 
 
 def test_packaging_scripts_do_not_collect_all_torch() -> None:

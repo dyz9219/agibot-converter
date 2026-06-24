@@ -42,10 +42,12 @@ if (-not (Test-Path (Join-Path $assets "pku_logo.ico"))) {
   --workpath "$root\build-onefile" `
   --collect-all flet `
   --collect-all flet_desktop `
-  --collect-submodules ray `
   --collect-binaries ray `
   --collect-binaries torch `
   --hidden-import torch `
+  --hidden-import ray `
+  --hidden-import ray.runtime_env `
+  --hidden-import ray._raylet `
   --collect-all lerobot `
   --collect-all agibot_utils `
   --collect-all psutil `

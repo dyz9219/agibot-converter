@@ -115,10 +115,12 @@ if ($resolvedProfile -eq "fast") {
     $collectArgs = @(
         "--collect-all", "flet",
         "--collect-all", "flet_desktop",
-        "--collect-submodules", "ray",
         "--collect-binaries", "ray",
         "--collect-binaries", "torch",
         "--hidden-import", "torch",
+        "--hidden-import", "ray",
+        "--hidden-import", "ray.runtime_env",
+        "--hidden-import", "ray._raylet",
         "--collect-all", "lerobot",
         "--collect-all", "jsonlines",
         "--collect-all", "agibot_utils",

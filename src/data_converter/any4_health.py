@@ -80,6 +80,17 @@ def _check_bundled_runtime(version: str, root: Path | None) -> RuntimeCheckResul
                 missing,
                 detail=f"bundled_error={psutil_probe}",
             )
+        ray_probe = _probe_ray_runtime(lightweight=lightweight)
+        if ray_probe != "ok":
+            missing.append("ray_runtime")
+            return _result(
+                False,
+                "bundled",
+                root,
+                None,
+                missing,
+                detail=f"bundled_error={ray_probe}",
+            )
         for p in [str(root), str(root / "agibot2lerobot")]:
             if p not in sys.path and Path(p).exists():
                 sys.path.insert(0, p)
@@ -263,6 +274,29 @@ def _probe_psutil_runtime(*, lightweight: bool) -> str:
         probe_parts.append(f"path0={sys.path[0] if sys.path else ''}")
         probe_parts.append(f"cwd={os.getcwd()}")
         return "; ".join(probe_parts)
+
+
+def _probe_ray_runtime(*, lightweight: bool) -> str:
+    required_attrs = ("init", "available_resources", "remote", "get", "shutdown")
+    try:
+        if importlib.util.find_spec("ray") is None:
+            raise ModuleNotFoundError("ray")
+        if importlib.util.find_spec("ray.runtime_env") is None:
+            raise ModuleNotFoundError("ray.runtime_env")
+        if lightweight:
+            return "ok"
+
+        ray = importlib.import_module("ray")
+        runtime_env = importlib.import_module("ray.runtime_env")
+        missing_attrs = [name for name in required_attrs if not hasattr(ray, name)]
+        if missing_attrs:
+            raise AttributeError(f"ray missing attrs: {','.join(missing_attrs)}")
+        if not hasattr(runtime_env, "RuntimeEnv"):
+            raise AttributeError("ray.runtime_env missing RuntimeEnv")
+        return "ok"
+    except Exception as exc:
+        meipass = getattr(sys, "_MEIPASS", "")
+        return f"{type(exc).__name__}:{exc}; meipass={meipass or '<none>'}"
 
 
 def _platform_psutil_suffix() -> str:

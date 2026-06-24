@@ -145,6 +145,39 @@ class Any4HealthTests(unittest.TestCase):
         self.assertEqual(result, "ok")
         self.assertEqual(imported, ["psutil", "psutil._psutil_linux"])
 
+    def test_frozen_ray_probe_imports_runtime_env_entrypoint(self) -> None:
+        imported: list[str] = []
+        fake_ray = SimpleNamespace(
+            init=object(),
+            available_resources=object(),
+            remote=object(),
+            get=object(),
+            shutdown=object(),
+        )
+        fake_runtime_env = SimpleNamespace(RuntimeEnv=object)
+
+        def fake_find_spec(name: str):
+            if name in {"ray", "ray.runtime_env"}:
+                return SimpleNamespace(origin=f"{name}.py")
+            return None
+
+        def fake_import_module(name: str):
+            imported.append(name)
+            if name == "ray":
+                return fake_ray
+            if name == "ray.runtime_env":
+                return fake_runtime_env
+            raise AssertionError(f"unexpected import: {name}")
+
+        with (
+            patch("data_converter.any4_health.importlib.util.find_spec", side_effect=fake_find_spec),
+            patch("data_converter.any4_health.importlib.import_module", side_effect=fake_import_module),
+        ):
+            result = any4_health._probe_ray_runtime(lightweight=False)
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(imported, ["ray", "ray.runtime_env"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
