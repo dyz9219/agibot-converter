@@ -18,7 +18,7 @@
   - `.\scripts\build_exe.ps1 -Profile fast`
   - `.\scripts\build_exe.ps1 -Profile full`
 - 校验打包后的 any4 一致性：
-  - `.\scripts\verify_packaged_any4.ps1 -DistRoot dist/DataConverterShell-full`
+  - `.\scripts\verify_packaged_any4.ps1 -DistRoot dist/DataConverterShell`
 
 ## 代码风格与命名规范
 - Python 3.11+，4 空格缩进，UTF-8。

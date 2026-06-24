@@ -60,3 +60,23 @@ def test_packaging_scripts_do_not_collect_all_torch() -> None:
         assert '"--collect-all", "torch"' not in script
         assert '"--collect-submodules", "torch"' not in script
 
+
+def test_windows_full_package_uses_unqualified_distribution_name() -> None:
+    workflow = _read_repo_text(".github/workflows/build.yml")
+    build_script = _read_repo_text("scripts/build_exe.ps1")
+    fingerprint_script = _read_repo_text("scripts/verify_build_fingerprint.ps1")
+
+    assert "name: DataConverterShell-Windows\n" in workflow
+    assert "DataConverterShell-Windows-full" not in workflow
+    assert "dist/DataConverterShell/DataConverterShell.exe" in workflow
+    assert "dist/DataConverterShell-full/DataConverterShell-full.exe" not in workflow
+    assert '$name = "DataConverterShell"' in build_script
+    assert '$name = "DataConverterShell-full"' not in build_script
+    assert "dist\\DataConverterShell\\DataConverterShell.exe" in fingerprint_script
+    assert "dist\\DataConverterShell-full\\DataConverterShell-full.exe" not in fingerprint_script
+
+
+def test_build_fingerprint_ignores_generated_spec_file() -> None:
+    for path in ["scripts/build_exe.ps1", "scripts/verify_build_fingerprint.ps1"]:
+        script = _read_repo_text(path)
+        assert 'root / "DataConverterShell.spec"' not in script

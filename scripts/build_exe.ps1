@@ -55,7 +55,7 @@ import hashlib
 from pathlib import Path
 
 root = Path(r"$($root.Replace('\', '/'))")
-targets = [root / "src" / "data_converter", root / "scripts" / "build_exe.ps1", root / "DataConverterShell.spec"]
+targets = [root / "src" / "data_converter", root / "scripts" / "build_exe.ps1"]
 h = hashlib.sha256()
 for t in targets:
     if t.is_dir():
@@ -106,8 +106,8 @@ if ($resolvedProfile -eq "fast") {
     )
 } else {
     $distPath = "$root\dist"
-    $workPath = "$root\build\DataConverterShell-full"
-    $name = "DataConverterShell-full"
+    $workPath = "$root\build\DataConverterShell"
+    $name = "DataConverterShell"
     $collectArgs = @(
         "--collect-all", "flet",
         "--collect-all", "flet_desktop",

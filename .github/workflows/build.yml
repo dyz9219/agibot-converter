@@ -39,15 +39,15 @@ jobs:
           ./scripts/build_exe.ps1 -Profile full -Clean
       - name: Verify packaged any4
         run: |
-          ./scripts/verify_packaged_any4.ps1 -DistRoot dist/DataConverterShell-full
+          ./scripts/verify_packaged_any4.ps1 -DistRoot dist/DataConverterShell
       - name: Verify build fingerprint
         run: |
-          ./scripts/verify_build_fingerprint.ps1 -ExePath dist/DataConverterShell-full/DataConverterShell-full.exe
+          ./scripts/verify_build_fingerprint.ps1 -ExePath dist/DataConverterShell/DataConverterShell.exe
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DataConverterShell-Windows-full
-          path: dist/DataConverterShell-full/
+          name: DataConverterShell-Windows
+          path: dist/DataConverterShell/
 
   build-linux-x64:
     runs-on: ubuntu-latest

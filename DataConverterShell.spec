@@ -4,20 +4,21 @@ from PyInstaller.utils.hooks import collect_dynamic_libs
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('D:\\workspace\\work\\bwy\\agibot-converter\\any4lerobot', 'any4lerobot'), ('D:\\workspace\\work\\bwy\\agibot-converter\\assets', 'assets')]
+datas = [('D:\\workspace\\work\\bwy\\agibot-converter\\any4lerobot', 'any4lerobot'), ('D:\\workspace\\work\\bwy\\agibot-converter\\assets', 'assets'), ('D:\\workspace\\work\\bwy\\agibot-converter\\build\\build-meta\\build_meta.json', 'assets')]
 binaries = []
-hiddenimports = ['psutil._psutil_windows', 'ray.thirdparty_files.psutil._psutil_windows']
+hiddenimports = ['torch', 'psutil._psutil_windows', 'ray.thirdparty_files.psutil._psutil_windows']
 datas += collect_data_files('tkinter')
+binaries += collect_dynamic_libs('ray')
+binaries += collect_dynamic_libs('torch')
+hiddenimports += collect_submodules('ray')
 hiddenimports += collect_submodules('rosbags.typesys.stores')
 tmp_ret = collect_all('flet')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('flet_desktop')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-binaries += collect_dynamic_libs('ray')
-hiddenimports += collect_submodules('ray')
-tmp_ret = collect_all('torch')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('lerobot')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('jsonlines')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('agibot_utils')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]

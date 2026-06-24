@@ -16,7 +16,7 @@ if (-not (Test-Path $py)) {
 
 if (-not $ExePath) {
     $fast = Join-Path $root "dist\DataConverterShell-fast\DataConverterShell-fast.exe"
-    $full = Join-Path $root "dist\DataConverterShell-full\DataConverterShell-full.exe"
+    $full = Join-Path $root "dist\DataConverterShell\DataConverterShell.exe"
     if (Test-Path $full) {
         $ExePath = $full
     } elseif (Test-Path $fast) {
@@ -36,7 +36,7 @@ import hashlib
 from pathlib import Path
 
 root = Path(r"$($root.Replace('\', '/'))")
-targets = [root / "src" / "data_converter", root / "scripts" / "build_exe.ps1", root / "DataConverterShell.spec"]
+targets = [root / "src" / "data_converter", root / "scripts" / "build_exe.ps1"]
 h = hashlib.sha256()
 for t in targets:
     if t.is_dir():
