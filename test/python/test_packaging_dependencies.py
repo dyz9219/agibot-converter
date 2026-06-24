@@ -86,3 +86,14 @@ def test_build_fingerprint_normalizes_line_endings() -> None:
     for path in ["scripts/build_exe.ps1", "scripts/verify_build_fingerprint.ps1"]:
         script = _read_repo_text(path)
         assert 'replace(b"\\r\\n", b"\\n")' in script
+
+
+def test_linux_x64_package_is_single_file_artifact() -> None:
+    workflow = _read_repo_text(".github/workflows/build.yml")
+    linux_x64 = workflow.split("  build-linux-x64:", 1)[1].split("  build-linux-arm64:", 1)[0]
+
+    assert "--onefile" in linux_x64
+    assert "--onedir" not in linux_x64
+    assert "./dist/DataConverterShell --internal-run-any4-health --version v3.0" in linux_x64
+    assert "path: dist/DataConverterShell\n" in linux_x64
+    assert "path: dist/DataConverterShell/\n" not in linux_x64
