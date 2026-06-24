@@ -97,3 +97,14 @@ def test_linux_x64_package_is_single_file_artifact() -> None:
     assert "./dist/DataConverterShell --internal-run-any4-health --version v3.0" in linux_x64
     assert "path: dist/DataConverterShell\n" in linux_x64
     assert "path: dist/DataConverterShell/\n" not in linux_x64
+
+
+def test_linux_x64_installs_cpu_torch_before_accelerate() -> None:
+    workflow = _read_repo_text(".github/workflows/build.yml")
+    linux_x64 = workflow.split("  build-linux-x64:", 1)[1].split("  build-linux-arm64:", 1)[0]
+    cpu_torch_install = 'python -m pip install --index-url https://download.pytorch.org/whl/cpu'
+    accelerate_dependency = '"accelerate>=1.10.0,<2.0.0"'
+
+    assert cpu_torch_install in linux_x64
+    assert accelerate_dependency in linux_x64
+    assert linux_x64.index(cpu_torch_install) < linux_x64.index(accelerate_dependency)
