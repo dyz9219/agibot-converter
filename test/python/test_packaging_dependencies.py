@@ -80,3 +80,9 @@ def test_build_fingerprint_ignores_generated_spec_file() -> None:
     for path in ["scripts/build_exe.ps1", "scripts/verify_build_fingerprint.ps1"]:
         script = _read_repo_text(path)
         assert 'root / "DataConverterShell.spec"' not in script
+
+
+def test_build_fingerprint_normalizes_line_endings() -> None:
+    for path in ["scripts/build_exe.ps1", "scripts/verify_build_fingerprint.ps1"]:
+        script = _read_repo_text(path)
+        assert 'replace(b"\\r\\n", b"\\n")' in script

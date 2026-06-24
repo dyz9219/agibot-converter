@@ -57,6 +57,10 @@ from pathlib import Path
 root = Path(r"$($root.Replace('\', '/'))")
 targets = [root / "src" / "data_converter", root / "scripts" / "build_exe.ps1"]
 h = hashlib.sha256()
+
+def stable_bytes(path: Path) -> bytes:
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
 for t in targets:
     if t.is_dir():
         for p in sorted([x for x in t.rglob("*") if x.is_file()]):
@@ -65,13 +69,13 @@ for t in targets:
             rel = p.relative_to(root).as_posix().encode("utf-8")
             h.update(rel)
             h.update(b"\0")
-            h.update(p.read_bytes())
+            h.update(stable_bytes(p))
             h.update(b"\0")
     elif t.is_file():
         rel = t.relative_to(root).as_posix().encode("utf-8")
         h.update(rel)
         h.update(b"\0")
-        h.update(t.read_bytes())
+        h.update(stable_bytes(t))
         h.update(b"\0")
 print(h.hexdigest())
 "@
