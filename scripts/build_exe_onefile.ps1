@@ -48,6 +48,7 @@ if (-not (Test-Path (Join-Path $assets "pku_logo.ico"))) {
   --hidden-import ray `
   --hidden-import ray.runtime_env `
   --hidden-import ray._raylet `
+  --hidden-import ray._private.object_ref_generator `
   --collect-all lerobot `
   --collect-all agibot_utils `
   --collect-all psutil `

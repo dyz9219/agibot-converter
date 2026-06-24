@@ -46,6 +46,7 @@ def test_packaging_scripts_do_not_collect_all_ray() -> None:
         assert '"--collect-all", "ray"' not in script
         assert '"--collect-submodules", "ray"' not in script
         assert "ray.runtime_env" in script
+        assert "ray._private.object_ref_generator" in script
         assert "ray.thirdparty_files.colorama" in script
 
 
