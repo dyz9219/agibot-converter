@@ -157,3 +157,118 @@ Linux x64 artifact：
 ## 当前结论
 
 修复已经推送到 GitHub 并通过完整多平台 Actions 验证。Linux x64 不再上传裸 ELF，而是上传包含可执行位的 `.tar.gz`，并且 CI 已验证下载前的最终压缩包解包后仍可执行。
+
+# 2026-06-25 Linux x64 artifact 下载后真数据转换验证
+
+## 问题背景
+
+用户要求确认是否已经把 `build-linux-x64` artifact 下载到本地验证，并明确要求使用以下目录下的 zip 包测试数据转换功能：
+
+- `E:\Users\dyz\Documents\WXWork\1688858286666779\Cache\File\2026-06\task_2059925964389343234`
+
+## 验证输入
+
+样本目录中存在 50 个 zip。本轮先选取一个代表性 zip 做真实转换 smoke：
+
+- `test_gaok_1_1_172311_86.zip`
+- 原始大小：约 `13 MB`
+
+## artifact 下载与解包
+
+最初使用 `gh run download 28159363515 -n DataConverterShell-Linux-x64` 下载超过 10 分钟超时，并留下 `gh` 进程。已停止残留进程后改用 GitHub artifact API 下载：
+
+```powershell
+$artifactDir = Join-Path $env:TEMP "agibot-linux-x64-artifact-28159363515"
+$zipPath = Join-Path $artifactDir "DataConverterShell-Linux-x64-artifact.zip"
+$token = gh auth token
+curl.exe -L --fail --retry 3 --retry-delay 5 `
+  -H "Authorization: Bearer $token" `
+  -H "Accept: application/vnd.github+json" `
+  -o $zipPath `
+  "https://api.github.com/repos/dyz9219/agibot-converter/actions/artifacts/7873802265/zip"
+```
+
+下载结果：
+
+- artifact zip：`446,979,282` bytes
+- 解开 GitHub artifact zip 后包含：
+  - `DataConverterShell-Linux-x64.tar.gz`
+  - 大小：`446,845,199` bytes
+
+## Docker 验证命令
+
+使用下载到本地的 artifact，而不是本地构建产物。Docker 挂载：
+
+- artifact：`%TEMP%\agibot-linux-x64-artifact-28159363515\artifact-zip-expanded`
+- 输入数据：`E:\Users\dyz\Documents\WXWork\1688858286666779\Cache\File\2026-06\task_2059925964389343234`
+- 输出目录：`%TEMP%\agibot-linux-x64-realdata-verify`
+
+执行命令核心如下：
+
+```bash
+tar -xzf /artifact/DataConverterShell-Linux-x64.tar.gz -C /work/bin
+ls -l /work/bin/DataConverterShell
+test -x /work/bin/DataConverterShell
+/work/bin/DataConverterShell --internal-build-info
+AGIBOT_FORCE_BUNDLED_ANY4=1 /work/bin/DataConverterShell \
+  --internal-run-conversion \
+  --input-path /data/test_gaok_1_1_172311_86.zip \
+  --output-path /out \
+  --target lerobot \
+  --version v3.0 \
+  --concurrency 1
+```
+
+## 验证结果
+
+artifact 解包后权限：
+
+- `-rwxr-xr-x`
+- 文件大小：`450,999,472` bytes
+
+下载 artifact 的 build info：
+
+- `profile`: `linux-x64`
+- `git_commit`: `2719b20907fea07492f2a033e24293a1b5ce0113`
+- `git_dirty`: `false`
+- `source_fingerprint`: `linux-ci`
+
+真实转换命令输出：
+
+```text
+RUN_SUMMARY total=1 success=1 failed=0 skipped=0
+```
+
+生成产物包括：
+
+- `any4_input_diag.json`
+- `data/chunk-000/file-000.parquet`
+- `manifest.json`
+- `meta/info.json`
+- `meta/stats.json`
+- `meta/tasks.parquet`
+- `videos/.../*.mp4`
+
+`manifest.json` 关键结果：
+
+- `status`: `success`
+- `target`: `lerobot`
+- `lerobot_version`: `v3.0`
+- `conversion_mode`: `lerobot_real`
+- `input_kind`: `raw`
+- `adapter_used`: `true`
+- `runtime_mode`: `bundled`
+- `elapsed_seconds`: `46.409091`
+
+`meta/info.json` 关键结果：
+
+- `codebase_version`: `v3.0`
+- `total_episodes`: `1`
+- `total_frames`: `460`
+- `total_tasks`: `1`
+
+## 当前结论
+
+已完成“下载 GitHub Actions 的 `build-linux-x64` artifact 到本地，再用用户指定目录下 zip 包进行真实数据转换”的验证。验证对象是单个代表性 zip：`test_gaok_1_1_172311_86.zip`。结果为转换成功，且运行模式为 bundled runtime。
+
+本轮尚未对该目录下全部 50 个 zip 做全量批处理验证；若需要全量验证，应单独运行目录级输入并预留较长时间。
