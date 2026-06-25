@@ -95,3 +95,65 @@ Linux x64 修复已通过本机 Docker Desktop 的真实 Linux x86_64 构建与�
 - 已恢复 Docker Desktop 原始 `settings.json`
 - 已重启 Docker Desktop 使原配置生效
 - 未将 Linux 构建产物写入仓库工作区；构建发生在容器内部 `/work`
+
+# 2026-06-25 GitHub Actions 推送验证
+
+## 问题背景
+
+用户追问是否已经上传代码到 GitHub Actions 构建。前一轮只完成了本地 Docker 验证，还没有推送远端触发 CI。
+
+## 改动与推送
+
+提交并推送到 `main`：
+
+- commit：`2719b20`
+- subject：`fix(ci): preserve linux artifact executable bit`
+- push：普通推送到 `origin/main`
+
+本次提交包含：
+
+- Linux x64 / ARM64 artifact 改为上传 `.tar.gz`；
+- CI 中新增解包后 `test -x` 与 `--internal-build-info` 验证；
+- packaging 测试约束；
+- 2026-06-25 Docker 本地验证记录。
+
+## Actions 验证结果
+
+GitHub Actions run：
+
+- run id：`28159363515`
+- workflow：`Build Multi-Platform`
+- 触发方式：push
+- head sha：`2719b20907fea07492f2a033e24293a1b5ce0113`
+- 结果：`success`
+- URL：`https://github.com/dyz9219/agibot-converter/actions/runs/28159363515`
+
+Job 结果：
+
+- `build-linux-x64`：success，耗时约 `7m56s`
+- `build-linux-arm64`：success，耗时约 `5m20s`
+- `build-windows`：success，耗时约 `6m59s`
+
+Linux x64 关键验证：
+
+- `ROSBAG_HEALTH_OK`
+- `ANY4_HEALTH_OK` for `v3.0`
+- `ANY4_HEALTH_OK` for `v2.1`
+- `ANY4_HEALTH_OK` for `v2.0`
+- `Package Linux artifact` 步骤通过
+- 该步骤实际执行：
+  - `tar -czf dist/DataConverterShell-Linux-x64.tar.gz -C dist DataConverterShell`
+  - `tar -xzf dist/DataConverterShell-Linux-x64.tar.gz -C /tmp/agibot-linux-x64-package-check`
+  - `test -x /tmp/agibot-linux-x64-package-check/DataConverterShell`
+  - `/tmp/agibot-linux-x64-package-check/DataConverterShell --internal-build-info`
+
+Linux x64 artifact：
+
+- 上传路径：`dist/DataConverterShell-Linux-x64.tar.gz`
+- artifact name：`DataConverterShell-Linux-x64`
+- artifact id：`7873802265`
+- final size：`446,979,282` bytes
+
+## 当前结论
+
+修复已经推送到 GitHub 并通过完整多平台 Actions 验证。Linux x64 不再上传裸 ELF，而是上传包含可执行位的 `.tar.gz`，并且 CI 已验证下载前的最终压缩包解包后仍可执行。
