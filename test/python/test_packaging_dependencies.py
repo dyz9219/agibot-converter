@@ -100,8 +100,21 @@ def test_linux_x64_package_is_single_file_artifact() -> None:
     assert "--onefile" in linux_x64
     assert "--onedir" not in linux_x64
     assert "./dist/DataConverterShell --internal-run-any4-health --version v3.0" in linux_x64
-    assert "path: dist/DataConverterShell\n" in linux_x64
+    assert "tar -czf dist/DataConverterShell-Linux-x64.tar.gz -C dist DataConverterShell" in linux_x64
+    assert "test -x /tmp/agibot-linux-x64-package-check/DataConverterShell" in linux_x64
+    assert "path: dist/DataConverterShell-Linux-x64.tar.gz\n" in linux_x64
     assert "path: dist/DataConverterShell/\n" not in linux_x64
+    assert "path: dist/DataConverterShell\n" not in linux_x64
+
+
+def test_linux_arm64_package_preserves_executable_bit() -> None:
+    workflow = _read_repo_text(".github/workflows/build.yml")
+    linux_arm64 = workflow.split("  build-linux-arm64:", 1)[1]
+
+    assert "tar -czf dist/DataConverterShell-Linux-ARM64.tar.gz -C dist DataConverterShell" in linux_arm64
+    assert "test -x /tmp/agibot-linux-arm64-package-check/DataConverterShell" in linux_arm64
+    assert "path: dist/DataConverterShell-Linux-ARM64.tar.gz\n" in linux_arm64
+    assert "path: dist/DataConverterShell\n" not in linux_arm64
 
 
 def test_linux_x64_installs_cpu_torch_before_accelerate() -> None:

@@ -111,11 +111,18 @@ jobs:
           ./dist/DataConverterShell --internal-run-any4-health --version v3.0
           ./dist/DataConverterShell --internal-run-any4-health --version v2.1
           ./dist/DataConverterShell --internal-run-any4-health --version v2.0
+      - name: Package Linux artifact
+        run: |
+          tar -czf dist/DataConverterShell-Linux-x64.tar.gz -C dist DataConverterShell
+          mkdir -p /tmp/agibot-linux-x64-package-check
+          tar -xzf dist/DataConverterShell-Linux-x64.tar.gz -C /tmp/agibot-linux-x64-package-check
+          test -x /tmp/agibot-linux-x64-package-check/DataConverterShell
+          /tmp/agibot-linux-x64-package-check/DataConverterShell --internal-build-info
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: DataConverterShell-Linux-x64
-          path: dist/DataConverterShell
+          path: dist/DataConverterShell-Linux-x64.tar.gz
 
   build-linux-arm64:
     runs-on: ubuntu-24.04-arm  # GitHub ARM runner
@@ -178,9 +185,16 @@ jobs:
           ./dist/DataConverterShell --internal-run-any4-health --version v3.0
           ./dist/DataConverterShell --internal-run-any4-health --version v2.1
           ./dist/DataConverterShell --internal-run-any4-health --version v2.0
+      - name: Package Linux artifact
+        run: |
+          tar -czf dist/DataConverterShell-Linux-ARM64.tar.gz -C dist DataConverterShell
+          mkdir -p /tmp/agibot-linux-arm64-package-check
+          tar -xzf dist/DataConverterShell-Linux-ARM64.tar.gz -C /tmp/agibot-linux-arm64-package-check
+          test -x /tmp/agibot-linux-arm64-package-check/DataConverterShell
+          /tmp/agibot-linux-arm64-package-check/DataConverterShell --internal-build-info
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: DataConverterShell-Linux-ARM64
-          path: dist/DataConverterShell
+          path: dist/DataConverterShell-Linux-ARM64.tar.gz
 
